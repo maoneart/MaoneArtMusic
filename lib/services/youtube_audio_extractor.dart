@@ -32,7 +32,6 @@ class YoutubeAudioExtractor {
       }
     }
 
-    // Determine target videoId or search query
     final String? directVideoId = song.youtubeId;
 
     // 2. Direct Video ID extraction if available
@@ -55,27 +54,45 @@ class YoutubeAudioExtractor {
       }
     }
 
-    // 3. YouTube Explode Search Extraction
+    // 3. YouTube Explode Search Extraction with Compilation Video Filtering
     try {
       final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       List<Video> videoList = [];
       try {
-        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 4));
+        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 5));
         videoList = searchResults.whereType<Video>().toList();
       } catch (_) {}
 
       if (videoList.isEmpty) {
         try {
-          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 4));
+          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 5));
           videoList.addAll(fallbackResults.whereType<Video>());
         } catch (_) {}
       }
 
       if (videoList.isNotEmpty) {
+        // Strict Filter: EXCLUDE compilation/mix videos (>10 mins, <45s, or titles with "full album", "kompilasi", "2 jam", "nonstop")
         final candidates = List<Video>.from(
-          videoList.where((v) => v.duration == null || v.duration!.inSeconds > 60).take(5),
+          videoList.where((v) {
+            final seconds = v.duration?.inSeconds ?? 0;
+            final titleLower = v.title.toLowerCase();
+            if (seconds > 600 || (seconds > 0 && seconds < 45)) return false;
+            if (titleLower.contains('full album') || titleLower.contains('kompilasi') || titleLower.contains('nonstop') || titleLower.contains('2 jam') || titleLower.contains('1 jam')) return false;
+            return true;
+          }).take(5),
         );
-        if (candidates.isEmpty) candidates.addAll(videoList.take(3));
+
+        if (candidates.isEmpty) {
+          candidates.addAll(videoList.where((v) => (v.duration?.inSeconds ?? 0) <= 600).take(3));
+        }
+
+        candidates.sort((a, b) {
+          final aTopic = a.author.toLowerCase().contains('- topic') || a.title.toLowerCase().contains('audio') || a.title.toLowerCase().contains('official');
+          final bTopic = b.author.toLowerCase().contains('- topic') || b.title.toLowerCase().contains('audio') || b.title.toLowerCase().contains('official');
+          if (aTopic && !bTopic) return -1;
+          if (!aTopic && bTopic) return 1;
+          return 0;
+        });
 
         for (final selectedVideo in candidates) {
           try {
@@ -95,7 +112,7 @@ class YoutubeAudioExtractor {
             }
 
             if (selectedUrl != null && selectedUrl.isNotEmpty) {
-              print('✅ Full-length YouTube stream extracted for: ${song.title}');
+              print('✅ Full-length YouTube stream extracted for: ${song.title} (${selectedVideo.title})');
               _streamCache[song.id] = _CachedStream(selectedUrl, DateTime.now());
               return selectedUrl;
             }
@@ -110,7 +127,7 @@ class YoutubeAudioExtractor {
 
     // 4. Invidious REST API fallback for Full-Length Audio Stream
     try {
-      final targetId = directVideoId ?? song.id.replaceAll('yt_', '').replaceAll('yt_search_', '').replaceAll('yt_inv_', '');
+      final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       final invidiousInstances = [
         'https://inv.tux.pizza',
         'https://invidious.nerdvpn.de',
@@ -119,16 +136,28 @@ class YoutubeAudioExtractor {
 
       for (final instance in invidiousInstances) {
         try {
-          final videoRes = await http.get(Uri.parse('$instance/api/v1/videos/$targetId')).timeout(const Duration(seconds: 3));
-          if (videoRes.statusCode == 200) {
-            final data = json.decode(videoRes.body);
-            final List adaptive = data['adaptiveFormats'] ?? [];
-            final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
-            if (audioStreams.isNotEmpty) {
-              final fullUrl = audioStreams.first['url'].toString();
-              print('✅ Invidious Full-Length Stream URL: ${song.title}');
-              _streamCache[song.id] = _CachedStream(fullUrl, DateTime.now());
-              return fullUrl;
+          final searchRes = await http.get(Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent(searchQuery)}&type=video')).timeout(const Duration(seconds: 4));
+          if (searchRes.statusCode == 200) {
+            final List results = json.decode(searchRes.body);
+            final filtered = results.where((item) {
+              final sec = item['lengthSeconds']?.toInt() ?? 0;
+              return sec > 0 && sec <= 600;
+            }).toList();
+
+            if (filtered.isNotEmpty) {
+              final videoId = filtered.first['videoId'];
+              final videoRes = await http.get(Uri.parse('$instance/api/v1/videos/$videoId')).timeout(const Duration(seconds: 4));
+              if (videoRes.statusCode == 200) {
+                final data = json.decode(videoRes.body);
+                final List adaptive = data['adaptiveFormats'] ?? [];
+                final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
+                if (audioStreams.isNotEmpty) {
+                  final fullUrl = audioStreams.first['url'].toString();
+                  print('✅ Invidious Full-Length Stream URL for: ${song.title}');
+                  _streamCache[song.id] = _CachedStream(fullUrl, DateTime.now());
+                  return fullUrl;
+                }
+              }
             }
           }
         } catch (_) {}

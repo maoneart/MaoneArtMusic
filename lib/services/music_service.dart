@@ -1,110 +1,199 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 
 class MusicService {
-  static final YoutubeExplode _yt = YoutubeExplode();
+  static const String _iTunesSearchUrl = 'https://itunes.apple.com/search';
 
-  /// Convert YouTube Video object to Song instance
-  Song _videoToSong(Video video, {String prefix = 'yt'}) {
-    final videoId = video.id.value;
-    final highResArtwork = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
-    final int duration = video.duration?.inSeconds ?? 240;
+  Song _parseSongItem(dynamic item, String prefix) {
+    final String rawArtwork = item['artworkUrl100'] ?? item['artworkUrl60'] ?? item['artworkUrl30'] ?? '';
+    final String highResArtwork = rawArtwork.isNotEmpty
+        ? rawArtwork.replaceAll(RegExp(r'\d+x\d+(?:bb)?'), '600x600bb')
+        : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
 
     return Song(
-      id: '${prefix}_$videoId',
-      title: video.title,
-      artist: video.author,
-      album: 'YouTube Music',
+      id: '${prefix}_${item['trackId']}',
+      title: item['trackName'] ?? 'Unknown Track',
+      artist: item['artistName'] ?? 'Unknown Artist',
+      album: item['collectionName'] ?? 'Single',
       artworkUrl: highResArtwork,
-      durationSeconds: duration,
-      youtubeId: videoId,
-      streamUrl: null, // Pure YouTube full-length audio stream!
+      durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
+      streamUrl: null, // Forces pure YouTube full-length audio stream extraction!
     );
   }
 
-  /// Search songs directly on YouTube Music / YouTube with duration filtering & smart sorting
+  /// Search real individual tracks localized for Indonesian & Global markets
   Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
     if (query.trim().isEmpty) return [];
+
+    final Map<String, Song> resultsMap = {};
     final List<Song> songList = [];
-    final Set<String> addedIds = {};
 
     try {
-      // 1. Try YoutubeExplode search
-      final searchResults = await _yt.search.search(query).timeout(const Duration(seconds: 5));
-      for (final video in searchResults.whereType<Video>()) {
-        final videoId = video.id.value;
-        if (!addedIds.contains(videoId)) {
-          addedIds.add(videoId);
-          songList.add(_videoToSong(video, prefix: 'yt_search'));
+      final indoUri = Uri.parse('$_iTunesSearchUrl?country=id&term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
+      final response = await http.get(indoUri).timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List results = data['results'] ?? [];
+
+        for (final item in results) {
+          final song = _parseSongItem(item, 'itunes_id');
+          if (!resultsMap.containsKey(song.id)) {
+            resultsMap[song.id] = song;
+            songList.add(song);
+          }
         }
       }
     } catch (e) {
-      print('YouTube Explode search notice: $e');
+      print('Error searching store: $e');
     }
 
-    // 2. Invidious REST API Search fallback for maximum reliability
     if (songList.length < 5) {
-      final invidiousInstances = [
-        'https://inv.tux.pizza',
-        'https://invidious.nerdvpn.de',
-        'https://yewtu.be',
-      ];
+      try {
+        final genUri = Uri.parse('$_iTunesSearchUrl?term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
+        final genResponse = await http.get(genUri).timeout(const Duration(seconds: 8));
 
-      for (final mirror in invidiousInstances) {
-        try {
-          final uri = Uri.parse('$mirror/api/v1/search?q=${Uri.encodeComponent(query)}&type=video');
-          final res = await http.get(uri).timeout(const Duration(seconds: 4));
-          if (res.statusCode == 200) {
-            final List items = json.decode(res.body);
-            for (final item in items) {
-              final videoId = item['videoId'];
-              if (videoId != null && !addedIds.contains(videoId)) {
-                addedIds.add(videoId);
-                final String title = item['title'] ?? 'Unknown Track';
-                final String author = item['author'] ?? 'YouTube Music';
-                final int duration = item['lengthSeconds']?.toInt() ?? 240;
-                final String artwork = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+        if (genResponse.statusCode == 200) {
+          final data = json.decode(genResponse.body);
+          final List results = data['results'] ?? [];
 
-                songList.add(Song(
-                  id: 'yt_inv_$videoId',
-                  title: title,
-                  artist: author,
-                  album: 'YouTube Music',
-                  artworkUrl: artwork,
-                  durationSeconds: duration,
-                  youtubeId: videoId,
-                  streamUrl: null,
-                ));
-              }
+          for (final item in results) {
+            final song = _parseSongItem(item, 'itunes_gen');
+            if (!resultsMap.containsKey(song.id)) {
+              resultsMap[song.id] = song;
+              songList.add(song);
             }
-            if (songList.isNotEmpty) break;
           }
-        } catch (_) {}
+        }
+      } catch (_) {}
+    }
+
+    return songList;
+  }
+
+  /// Fetch real-time Top Individual Songs RSS Feed (Indonesia / Global)
+  Future<List<Song>> getItunesRssTrending({String country = 'id', int limit = 30}) async {
+    try {
+      final uri = Uri.parse('https://itunes.apple.com/$country/rss/topsongs/limit=$limit/json');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List entries = data['feed']?['entry'] ?? [];
+
+        return entries.map((item) {
+          final String title = item['im:name']?['label'] ?? 'Unknown Title';
+          final String artist = item['im:artist']?['label'] ?? 'Unknown Artist';
+          final String album = item['im:collection']?['im:name']?['label'] ?? 'Single';
+
+          final List images = item['im:image'] ?? [];
+          final String rawArtwork = images.isNotEmpty ? images.last['label'] ?? '' : '';
+          final String highResArtwork = rawArtwork.isNotEmpty
+              ? rawArtwork.replaceAll(RegExp(r'\d+x\d+(?:bb)?'), '600x600bb')
+              : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
+
+          final String trackId = item['id']?['attributes']?['im:id'] ?? '${title}_$artist'.hashCode.toString();
+
+          return Song(
+            id: 'itunes_rss_${country}_$trackId',
+            title: title,
+            artist: artist,
+            album: album,
+            artworkUrl: highResArtwork,
+            durationSeconds: 210,
+            streamUrl: null, // Forces YouTube full-length audio stream!
+          );
+        }).toList();
+      }
+    } catch (e) {
+      print('Error fetching RSS trending ($country): $e');
+    }
+    return [];
+  }
+
+  /// Fetch Deezer Top Global Individual Charts
+  Future<List<Song>> getDeezerChart({int limit = 25}) async {
+    try {
+      final uri = Uri.parse('https://api.deezer.com/chart/0/tracks?limit=$limit');
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List tracks = data['data'] ?? [];
+
+        return tracks.map((item) {
+          final String rawArtwork = item['album']?['cover_big'] ?? item['album']?['cover_medium'] ?? '';
+
+          return Song(
+            id: 'deezer_${item['id']}',
+            title: item['title'] ?? 'Unknown Title',
+            artist: item['artist']?['name'] ?? 'Unknown Artist',
+            album: item['album']?['title'] ?? 'Single',
+            artworkUrl: rawArtwork.isNotEmpty ? rawArtwork : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
+            durationSeconds: item['duration'] ?? 180,
+            streamUrl: null, // Forces YouTube full-length audio stream!
+          );
+        }).toList();
+      }
+    } catch (e) {
+      print('Error fetching Deezer charts: $e');
+    }
+    return [];
+  }
+
+  /// Get top trending individual songs / charts (NO 2-hour compilations!)
+  Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
+    final Map<String, Song> uniqueSongs = {};
+
+    if (category == 'Indonesia') {
+      final indoRss = await getItunesRssTrending(country: 'id', limit: 30);
+      for (final s in indoRss) {
+        uniqueSongs[s.id] = s;
+      }
+      if (uniqueSongs.length < 15) {
+        final searchIndo = await searchSongs('Bernadya Mahalini Juicy Luicy Tulus', limit: 15);
+        for (final s in searchIndo) {
+          uniqueSongs[s.id] = s;
+        }
+      }
+    } else if (category == 'Global') {
+      final globalRss = await getItunesRssTrending(country: 'us', limit: 25);
+      for (final s in globalRss) {
+        uniqueSongs[s.id] = s;
+      }
+      final deezer = await getDeezerChart(limit: 20);
+      for (final s in deezer) {
+        uniqueSongs[s.id] = s;
+      }
+    } else if (category == 'Viral TikTok') {
+      final tiktokHits = await searchSongs('Viral TikTok Song Hits 2026', limit: 25);
+      for (final s in tiktokHits) {
+        uniqueSongs[s.id] = s;
+      }
+    } else {
+      // Default 'Trending' (Mix of Indo & Global Top Hits)
+      final indoRss = await getItunesRssTrending(country: 'id', limit: 20);
+      for (final s in indoRss) {
+        uniqueSongs[s.id] = s;
+      }
+      final globalRss = await getItunesRssTrending(country: 'us', limit: 15);
+      for (final s in globalRss) {
+        uniqueSongs[s.id] = s;
+      }
+      final deezer = await getDeezerChart(limit: 15);
+      for (final s in deezer) {
+        uniqueSongs[s.id] = s;
       }
     }
 
-    return songList.take(limit).toList();
-  }
-
-  /// Fetch top trending music videos & songs directly from YouTube Music / YouTube
-  Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
-    String searchQuery;
-    if (category == 'Indonesia') {
-      searchQuery = 'Lagu Indonesia Populer Terbaru 2026';
-    } else if (category == 'Global') {
-      searchQuery = 'Top Global Songs 2026 Official Audio';
-    } else if (category == 'Viral TikTok') {
-      searchQuery = 'Lagu TikTok Viral Terbaru 2026';
-    } else {
-      searchQuery = 'Trending Music Indonesia Top Hits 2026';
+    if (uniqueSongs.isEmpty) {
+      final fallback = await searchSongs('Separuh Aku NOAH Bernadya', limit: 20);
+      for (final s in fallback) {
+        uniqueSongs[s.id] = s;
+      }
     }
 
-    final songs = await searchSongs(searchQuery, limit: 30);
-    if (songs.isNotEmpty) return songs;
-
-    // Emergency fallback search
-    return searchSongs('NOAH Bernadya Mahalini Juicy Luicy Tulus', limit: 20);
+    return uniqueSongs.values.toList();
   }
 }

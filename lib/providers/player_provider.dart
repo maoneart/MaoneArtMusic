@@ -80,24 +80,23 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 1. Stop current audio player
       await _audioPlayer.stop();
 
-      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song
+      // 2. Fast Resolve FULL-LENGTH Audio Stream
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal mengambil audio YouTube untuk '${song.title}'.";
+        _errorMessage = "Gagal mengambil audio untuk '${song.title}'.";
         notifyListeners();
         return;
       }
 
-      // 3. Set unthrottled audio stream source for ExoPlayer
+      // 3. Fast AudioSource initialization and instant playback
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
-
-      await _audioPlayer.setAudioSource(audioSource);
-      await _audioPlayer.play();
+      await _audioPlayer.setAudioSource(audioSource, preload: true);
+      _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {
-      print("Full YouTube Playback error for ${song.title}: $e");
+      print("Playback error for ${song.title}: $e");
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${song.title}': $e";
     }

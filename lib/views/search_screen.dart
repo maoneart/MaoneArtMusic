@@ -52,7 +52,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      if (Navigator.of(context).canPop()) {
+                        Navigator.of(context).pop();
+                      } else {
+                        _searchController.clear();
+                        ref.read(musicProvider).search('');
+                      }
+                    },
                   ),
                   Expanded(
                     child: GlassContainer(
@@ -61,7 +68,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       child: TextField(
                         controller: _searchController,
-                        autofocus: true,
+                        autofocus: false,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: "Cari lagu, artis, atau album...",

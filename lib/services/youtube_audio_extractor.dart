@@ -13,6 +13,21 @@ class YoutubeAudioExtractor {
   static final YoutubeExplode _yt = YoutubeExplode();
   static final Map<String, _CachedStream> _streamCache = {};
 
+  static String _cleanQuery(String title, String artist) {
+    String cleanTitle = title
+        .replaceAll(RegExp(r'\([^)]*\)'), '')
+        .replaceAll(RegExp(r'\[[^\]]*\]'), '')
+        .replaceAll(RegExp(r'- Single|- EP|Official Audio|Official Video|Lyric Video|Audio', caseSensitive: false), '')
+        .trim();
+    return '$cleanTitle $artist audio'.trim();
+  }
+
+  /// Asynchronously pre-fetch stream URL for a song in background (0ms latency on next/prev)
+  static void preFetchStreamUrl(Song song) {
+    if (_streamCache.containsKey(song.id) && !_streamCache[song.id]!.isExpired) return;
+    getAudioStreamUrl(song).then((_) {}).catchError((_) {});
+  }
+
   /// Extract highest quality unthrottled audio stream URL for a song from YouTube with fast caching
   static Future<String?> getAudioStreamUrl(Song song) async {
     // 0ms Latency: Return cached URL if valid
@@ -25,24 +40,36 @@ class YoutubeAudioExtractor {
     }
 
     try {
-      // 1. Search YouTube for video matching track title and artist
-      String searchQuery = '${song.title} ${song.artist}';
-      final videoList = await _yt.search.getVideos(searchQuery).timeout(const Duration(seconds: 10));
-      if (videoList.isEmpty) {
-        return null;
+      // 1. Clean query for high accuracy YouTube search
+      final searchQuery = _cleanQuery(song.title, song.artist);
+      final videoList = await _yt.search.getVideos(searchQuery).timeout(const Duration(seconds: 6));
+
+      Video? selectedVideo;
+      if (videoList.isNotEmpty) {
+        final songFirstWord = song.title.trim().toLowerCase().split(' ').firstWhere(
+              (w) => w.length > 2,
+              orElse: () => song.title.trim().toLowerCase().split(' ').first,
+            );
+
+        selectedVideo = videoList.firstWhere(
+          (v) => v.title.toLowerCase().contains(songFirstWord),
+          orElse: () => videoList.first,
+        );
+      } else {
+        // Fallback: try raw query
+        final fallbackList = await _yt.search.getVideos('${song.title} ${song.artist}').timeout(const Duration(seconds: 5));
+        if (fallbackList.isNotEmpty) {
+          selectedVideo = fallbackList.first;
+        }
       }
 
-      // Filter for best video match
-      final video = videoList.firstWhere(
-        (v) => v.title.toLowerCase().contains(song.title.toLowerCase().split(' ').first),
-        orElse: () => videoList.first,
-      );
+      if (selectedVideo == null) return null;
 
-      final videoId = video.id.value;
-      print('Exact YouTube Video Matched: ${video.title} (Duration: ${video.duration})');
+      final videoId = selectedVideo.id.value;
+      print('Exact YouTube Video Matched: ${selectedVideo.title} (Duration: ${selectedVideo.duration})');
 
       // 2. Resolve stream manifest
-      final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 10));
+      final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 6));
 
       String? selectedUrl;
 

@@ -112,9 +112,9 @@ class PlayerStateNotifier extends ChangeNotifier {
     _playRequestId++;
     final int currentRequestId = _playRequestId;
 
-    // 2. Pause audio immediately so old track audio stops playing
+    // 2. Stop current audio immediately so old track stops playing
     try {
-      await _audioPlayer.pause();
+      await _audioPlayer.stop();
     } catch (_) {}
 
     // 3. Update Queue and Current Index
@@ -153,8 +153,16 @@ class PlayerStateNotifier extends ChangeNotifier {
       );
     }
 
+    // 5. Trigger background pre-fetching for adjacent tracks (0ms delay for Next / Previous)
+    if (_queue.length > 1) {
+      final int nextIndex = (_currentIndex + 1) % _queue.length;
+      final int prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
+      YoutubeAudioExtractor.preFetchStreamUrl(_queue[nextIndex]);
+      YoutubeAudioExtractor.preFetchStreamUrl(_queue[prevIndex]);
+    }
+
     try {
-      // 5. Asynchronously extract stream URL
+      // 6. Asynchronously extract stream URL
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!);
 
       // Check if user clicked Next/Prev or another track during network fetch
@@ -169,7 +177,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         notifyListeners();
 
         // Auto-advance to next song if queue is available
-        Future.delayed(const Duration(seconds: 2), () {
+        Future.delayed(const Duration(seconds: 1), () {
           if (_playRequestId == currentRequestId && _status == PlayerLoadingStatus.error) {
             next();
           }
@@ -177,7 +185,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 6. Set AudioSource and play
+      // 7. Set AudioSource and play
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
@@ -195,10 +203,24 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
-    if (_audioPlayer.playing) {
-      await _audioPlayer.pause();
-    } else {
-      await _audioPlayer.play();
+    if (_status == PlayerLoadingStatus.loading) {
+      return;
+    }
+
+    try {
+      if (_audioPlayer.playing) {
+        await _audioPlayer.pause();
+        _status = PlayerLoadingStatus.paused;
+      } else {
+        if (_currentSong != null && _audioPlayer.audioSource == null) {
+          await playSong(_currentSong!, index: _currentIndex);
+          return;
+        }
+        await _audioPlayer.play();
+        _status = PlayerLoadingStatus.playing;
+      }
+    } catch (e) {
+      print("Error in togglePlayPause: $e");
     }
     notifyListeners();
   }
@@ -227,7 +249,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
     }
 
-    await playSong(_queue[nextIdx], index: nextIdx);
+    await playSong(_queue[nextIdx], newQueue: _queue, index: nextIdx);
   }
 
   Future<void> previous() async {
@@ -251,7 +273,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
     }
 
-    await playSong(_queue[prevIdx], index: prevIdx);
+    await playSong(_queue[prevIdx], newQueue: _queue, index: prevIdx);
   }
 
   @override

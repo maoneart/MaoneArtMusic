@@ -190,28 +190,31 @@ class PlayerStateNotifier extends ChangeNotifier {
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal mengambil audio YouTube untuk '${_currentSong!.title}'.";
+        _errorMessage = "Gagal memutar audio '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
         return;
       }
 
-      // 7. Set AudioSource and start playing with User-Agent header to avoid 403 Forbidden
+      // 7. Set AudioSource and start playing immediately
       final audioSource = AudioSource.uri(
         Uri.parse(streamUrl),
         headers: const {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
       );
+
+      // Start ExoPlayer playback intent immediately
+      _audioPlayer.play();
+      _status = PlayerLoadingStatus.playing;
+      notifyListeners();
+
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
       if (_playRequestId != currentRequestId) return;
 
-      await _audioPlayer.play();
-      _status = PlayerLoadingStatus.playing;
-      notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
-      print("Full YouTube Playback error for ${_currentSong?.title}: $e");
+      print("Full Playback error for ${_currentSong?.title}: $e");
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${_currentSong?.title}': $e";
       notifyListeners();

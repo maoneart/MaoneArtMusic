@@ -18,6 +18,7 @@ class MusicService {
       album: item['collectionName'] ?? 'Single',
       artworkUrl: highResArtwork,
       durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
+      streamUrl: item['previewUrl'],
     );
   }
 
@@ -198,6 +199,7 @@ class MusicService {
             album: item['album']?['title'] ?? 'Single',
             artworkUrl: rawArtwork.isNotEmpty ? rawArtwork : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
             durationSeconds: item['duration'] ?? 180,
+            streamUrl: item['preview'],
           );
         }).toList();
       }

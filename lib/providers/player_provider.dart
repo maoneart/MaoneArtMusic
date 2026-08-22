@@ -175,13 +175,6 @@ class PlayerStateNotifier extends ChangeNotifier {
         _status = PlayerLoadingStatus.error;
         _errorMessage = "Gagal mengambil audio YouTube untuk '${_currentSong!.title}'.";
         notifyListeners();
-
-        // Auto-advance to next song if queue is available
-        Future.delayed(const Duration(seconds: 1), () {
-          if (_playRequestId == currentRequestId && _status == PlayerLoadingStatus.error) {
-            next();
-          }
-        });
         return;
       }
 

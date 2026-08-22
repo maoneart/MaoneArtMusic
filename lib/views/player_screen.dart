@@ -52,11 +52,13 @@ class PlayerScreen extends ConsumerWidget {
         children: [
           // Ambient Artwork Blur Background
           Positioned.fill(
-            child: CachedNetworkImage(
-              imageUrl: song.artworkUrl,
-              fit: BoxFit.cover,
-              errorWidget: (context, url, error) => Container(color: Colors.black),
-            ),
+            child: song.artworkUrl.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: song.artworkUrl,
+                    fit: BoxFit.cover,
+                    errorWidget: (context, url, error) => Container(color: Colors.black),
+                  )
+                : Container(color: Colors.black),
           ),
           Positioned.fill(
             child: BackdropFilter(
@@ -75,7 +77,7 @@ class PlayerScreen extends ConsumerWidget {
                 children: [
                   const Spacer(),
 
-                  // Big Artwork with Glass Glow
+                  // Big Artwork with Glass Glow & Gradient Fallback
                   Hero(
                     tag: 'player_artwork',
                     child: Container(
@@ -91,20 +93,37 @@ class PlayerScreen extends ConsumerWidget {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(24),
-                        child: CachedNetworkImage(
-                          imageUrl: song.artworkUrl,
-                          width: MediaQuery.of(context).size.width * 0.78,
-                          height: MediaQuery.of(context).size.width * 0.78,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: Colors.white.withOpacity(0.1),
-                            child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: Colors.white.withOpacity(0.1),
-                            child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
-                          ),
-                        ),
+                        child: song.artworkUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: song.artworkUrl,
+                                width: MediaQuery.of(context).size.width * 0.78,
+                                height: MediaQuery.of(context).size.width * 0.78,
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  color: Colors.white.withOpacity(0.1),
+                                  child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                                ),
+                                errorWidget: (context, url, error) => Container(
+                                  width: MediaQuery.of(context).size.width * 0.78,
+                                  height: MediaQuery.of(context).size.width * 0.78,
+                                  decoration: const BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [MaoneArtTheme.spotifyGreen, MaoneArtTheme.primaryPurple],
+                                    ),
+                                  ),
+                                  child: const Icon(Icons.music_note, color: Colors.white, size: 80),
+                                ),
+                              )
+                            : Container(
+                                width: MediaQuery.of(context).size.width * 0.78,
+                                height: MediaQuery.of(context).size.width * 0.78,
+                                decoration: const BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [MaoneArtTheme.spotifyGreen, MaoneArtTheme.primaryPurple],
+                                  ),
+                                ),
+                                child: const Icon(Icons.music_note, color: Colors.white, size: 80),
+                              ),
                       ),
                     ),
                   ),

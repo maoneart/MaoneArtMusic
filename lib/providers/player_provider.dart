@@ -195,13 +195,18 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Set AudioSource and start playing
-      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
+      // 7. Set AudioSource and start playing with User-Agent header to avoid 403 Forbidden
+      final audioSource = AudioSource.uri(
+        Uri.parse(streamUrl),
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+      );
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
       if (_playRequestId != currentRequestId) return;
 
-      _audioPlayer.play();
+      await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
       notifyListeners();
     } catch (e) {

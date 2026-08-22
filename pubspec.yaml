@@ -18,7 +18,7 @@ dependencies:
   audio_service: ^0.18.15
 
   # YouTube Audio Extraction & Networking
-  youtube_explode_dart: ^2.2.1
+  youtube_explode_dart: ^3.1.0
   http: ^1.2.1
   dio: ^5.4.3+1
 

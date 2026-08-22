@@ -97,7 +97,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Musify-style Full-Length Playback Engine (100% Full-Length YouTube Streams)
+  /// Musify-style Full-Length Playback Engine with Non-blocking Timeout Guards
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
@@ -146,20 +146,29 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
 
     try {
-      // 5. Asynchronously extract FULL-LENGTH YouTube stream URL (allow up to 10 seconds)
-      String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!).timeout(const Duration(seconds: 10));
+      // 5. Asynchronously extract FULL-LENGTH YouTube stream URL (allow up to 6 seconds)
+      String? streamUrl;
+      try {
+        streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!).timeout(const Duration(seconds: 6));
+      } catch (e) {
+        print("YouTube extraction notice: $e");
+      }
 
       if (_playRequestId != currentRequestId) return;
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal memutar lagu full '${_currentSong!.title}'. Coba lagu lain.";
+        _errorMessage = "Gagal memutar lagu '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
         return;
       }
 
-      // 6. Set URL and start playing full track
-      await _audioPlayer.setUrl(streamUrl);
+      // 6. Set URL with 4s timeout guard & play immediately so UI never freezes
+      try {
+        await _audioPlayer.setUrl(streamUrl).timeout(const Duration(seconds: 4));
+      } catch (setUrlErr) {
+        print("setUrl guard notice: $setUrlErr");
+      }
 
       if (_playRequestId != currentRequestId) return;
 

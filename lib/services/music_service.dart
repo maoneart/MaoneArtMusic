@@ -5,38 +5,98 @@ import '../models/song.dart';
 class MusicService {
   static const String _iTunesSearchUrl = 'https://itunes.apple.com/search';
 
-  /// Search tracks by query (e.g. artist, title, album)
-  Future<List<Song>> searchSongs(String query, {int limit = 25}) async {
+  Song _parseSongItem(dynamic item, String prefix) {
+    final String rawArtwork = item['artworkUrl100'] ?? item['artworkUrl60'] ?? item['artworkUrl30'] ?? '';
+    final String highResArtwork = rawArtwork.isNotEmpty
+        ? rawArtwork.replaceAll('100x100bb', '600x600bb').replaceAll('100x100', '600x600').replaceAll('60x60bb', '600x600bb')
+        : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
+
+    return Song(
+      id: '${prefix}_${item['trackId']}',
+      title: item['trackName'] ?? 'Unknown Track',
+      artist: item['artistName'] ?? 'Unknown Artist',
+      album: item['collectionName'] ?? 'Single',
+      artworkUrl: highResArtwork,
+      durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
+    );
+  }
+
+  /// Search tracks localized for Indonesian market (country=id) with smart Indonesian band/artist prioritization
+  Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
     if (query.trim().isEmpty) return [];
 
-    try {
-      final uri = Uri.parse('$_iTunesSearchUrl?term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
-      final response = await http.get(uri);
+    final Map<String, Song> resultsMap = {};
+    final List<Song> indoList = [];
+    final List<Song> generalList = [];
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+    try {
+      // 1. Primary: Search iTunes Indonesian Store (country=id)
+      final indoUri = Uri.parse('$_iTunesSearchUrl?country=id&term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
+      final indoResponse = await http.get(indoUri).timeout(const Duration(seconds: 8));
+
+      if (indoResponse.statusCode == 200) {
+        final data = json.decode(indoResponse.body);
         final List results = data['results'] ?? [];
 
-        return results.map((item) {
-          final String rawArtwork = item['artworkUrl100'] ?? item['artworkUrl60'] ?? item['artworkUrl30'] ?? '';
-          final String highResArtwork = rawArtwork.isNotEmpty
-              ? rawArtwork.replaceAll('100x100bb', '600x600bb').replaceAll('100x100', '600x600').replaceAll('60x60bb', '600x600bb')
-              : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
-
-          return Song(
-            id: 'itunes_${item['trackId']}',
-            title: item['trackName'] ?? 'Unknown Track',
-            artist: item['artistName'] ?? 'Unknown Artist',
-            album: item['collectionName'] ?? 'Single',
-            artworkUrl: highResArtwork,
-            durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
-          );
-        }).toList();
+        for (final item in results) {
+          final song = _parseSongItem(item, 'itunes_id');
+          if (!resultsMap.containsKey(song.id)) {
+            resultsMap[song.id] = song;
+            indoList.add(song);
+          }
+        }
       }
     } catch (e) {
-      print('Error searching songs: $e');
+      print('Error searching Indo store: $e');
     }
-    return [];
+
+    // 2. Secondary: Fallback / General search if needed
+    if (indoList.length < 10) {
+      try {
+        final genUri = Uri.parse('$_iTunesSearchUrl?term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
+        final genResponse = await http.get(genUri).timeout(const Duration(seconds: 8));
+
+        if (genResponse.statusCode == 200) {
+          final data = json.decode(genResponse.body);
+          final List results = data['results'] ?? [];
+
+          for (final item in results) {
+            final song = _parseSongItem(item, 'itunes_gen');
+            if (!resultsMap.containsKey(song.id)) {
+              resultsMap[song.id] = song;
+              generalList.add(song);
+            }
+          }
+        }
+      } catch (e) {
+        print('Error searching General store: $e');
+      }
+    }
+
+    final combined = [...indoList, ...generalList];
+
+    // Smart Sort: prioritize exact artist/title match (e.g. artist "NOAH", "Peterpan", "Sheila On 7")
+    final qLower = query.trim().toLowerCase();
+    combined.sort((a, b) {
+      final aArtistMatch = a.artist.toLowerCase() == qLower;
+      final bArtistMatch = b.artist.toLowerCase() == qLower;
+      if (aArtistMatch && !bArtistMatch) return -1;
+      if (!aArtistMatch && bArtistMatch) return 1;
+
+      final aArtistStartsWith = a.artist.toLowerCase().startsWith(qLower);
+      final bArtistStartsWith = b.artist.toLowerCase().startsWith(qLower);
+      if (aArtistStartsWith && !bArtistStartsWith) return -1;
+      if (!aArtistStartsWith && bArtistStartsWith) return 1;
+
+      final aArtistContains = a.artist.toLowerCase().contains(qLower);
+      final bArtistContains = b.artist.toLowerCase().contains(qLower);
+      if (aArtistContains && !bArtistContains) return -1;
+      if (!aArtistContains && bArtistContains) return 1;
+
+      return 0;
+    });
+
+    return combined;
   }
 
   /// Fetch real-time iTunes Top Songs RSS Feed (Indonesia / Global)

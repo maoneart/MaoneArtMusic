@@ -78,7 +78,12 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
 
       if (state.processingState == ProcessingState.completed) {
-        next();
+        // ONLY advance to next song if track played to end (within 5 seconds of duration)
+        if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 5) {
+          next();
+        } else {
+          _status = PlayerLoadingStatus.paused;
+        }
       } else if (state.playing) {
         _status = PlayerLoadingStatus.playing;
       } else if (state.processingState == ProcessingState.ready) {

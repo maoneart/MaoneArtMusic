@@ -57,7 +57,12 @@ class YoutubeAudioExtractor {
 
           String? selectedUrl;
           if (manifest.audioOnly.isNotEmpty) {
-            selectedUrl = manifest.audioOnly.withHighestBitrate().url.toString();
+            final audioStreams = manifest.audioOnly.toList();
+            final m4aStream = audioStreams.firstWhere(
+              (s) => s.container.name.contains('m4a') || s.audioCodec.contains('mp4a'),
+              orElse: () => manifest.audioOnly.withHighestBitrate(),
+            );
+            selectedUrl = m4aStream.url.toString();
           } else if (manifest.muxed.isNotEmpty) {
             selectedUrl = manifest.muxed.withHighestBitrate().url.toString();
           }

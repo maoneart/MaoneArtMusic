@@ -61,16 +61,17 @@ class PlayerStateNotifier extends ChangeNotifier {
     });
 
     _audioPlayer.playerStateStream.listen((state) {
+      // Do not overwrite UI status while loading a new track
+      if (_status == PlayerLoadingStatus.loading) {
+        return;
+      }
+
       if (state.processingState == ProcessingState.completed) {
         next();
       } else if (state.playing) {
         _status = PlayerLoadingStatus.playing;
       } else if (state.processingState == ProcessingState.ready) {
-        if (state.playing) {
-          _status = PlayerLoadingStatus.playing;
-        } else {
-          _status = PlayerLoadingStatus.paused;
-        }
+        _status = state.playing ? PlayerLoadingStatus.playing : PlayerLoadingStatus.paused;
       }
       notifyListeners();
     });
@@ -82,15 +83,18 @@ class PlayerStateNotifier extends ChangeNotifier {
 
     if (newQueue != null && newQueue.isNotEmpty) {
       _queue = List.from(newQueue);
-      _currentIndex = index;
-    } else if (!_queue.any((s) => s.id == song.id)) {
-      _queue.add(song);
-      _currentIndex = _queue.length - 1;
+      _currentIndex = index.clamp(0, _queue.length - 1);
+      _currentSong = _queue[_currentIndex];
     } else {
-      _currentIndex = index >= 0 && index < _queue.length ? index : _queue.indexWhere((s) => s.id == song.id);
+      if (!_queue.any((s) => s.id == song.id)) {
+        _queue.add(song);
+        _currentIndex = _queue.length - 1;
+      } else {
+        _currentIndex = index >= 0 && index < _queue.length ? index : _queue.indexWhere((s) => s.id == song.id);
+      }
+      _currentSong = _queue[_currentIndex];
     }
 
-    _currentSong = song;
     _status = PlayerLoadingStatus.loading;
     _position = Duration.zero;
     _duration = Duration.zero;
@@ -100,39 +104,36 @@ class PlayerStateNotifier extends ChangeNotifier {
     // Safely update Android MediaSession / Samsung One UI notification metadata
     if (globalAudioHandler is MyAudioHandler) {
       (globalAudioHandler as MyAudioHandler).setMediaItem(
-        id: song.id,
-        title: song.title,
-        artist: song.artist,
-        album: song.album,
-        artUri: song.artworkUrl,
-        duration: Duration(seconds: song.durationSeconds),
+        id: _currentSong!.id,
+        title: _currentSong!.title,
+        artist: _currentSong!.artist,
+        album: _currentSong!.album,
+        artUri: _currentSong!.artworkUrl,
+        duration: Duration(seconds: _currentSong!.durationSeconds),
       );
     }
 
     try {
-      // 1. Fully stop audio player and clear previous audio buffer pipeline
-      await _audioPlayer.stop();
-
-      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected new song
-      String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
+      // 1. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the exact selected song
+      String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!);
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal mengambil audio YouTube untuk '${song.title}'.";
+        _errorMessage = "Gagal mengambil audio YouTube untuk '${_currentSong!.title}'.";
         notifyListeners();
         return;
       }
 
-      // 3. Set new AudioSource and force initialPosition to Duration.zero so ExoPlayer plays the NEW stream instantly
+      // 2. Atomically swap AudioSource and force initialPosition to Duration.zero
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
 
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
       await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {
-      print("Full YouTube Playback error for ${song.title}: $e");
+      print("Full YouTube Playback error for ${_currentSong?.title}: $e");
       _status = PlayerLoadingStatus.error;
-      _errorMessage = "Gagal memutar '${song.title}': $e";
+      _errorMessage = "Gagal memutar '${_currentSong?.title}': $e";
     }
     notifyListeners();
   }
@@ -154,7 +155,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     if (_queue.isEmpty) return;
     int nextIdx = _currentIndex + 1;
     if (nextIdx >= _queue.length) {
-      nextIdx = 0; // Loop back to beginning of playlist
+      nextIdx = 0; // Loop back to beginning of queue
     }
     await playSong(_queue[nextIdx], index: nextIdx);
   }
@@ -163,7 +164,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     if (_queue.isEmpty) return;
     int prevIdx = _currentIndex - 1;
     if (prevIdx < 0) {
-      prevIdx = _queue.length - 1; // Loop back to end of playlist
+      prevIdx = _queue.length - 1; // Loop back to end of queue
     }
     await playSong(_queue[prevIdx], index: prevIdx);
   }

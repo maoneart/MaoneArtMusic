@@ -80,41 +80,24 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 1. Stop current audio player
       await _audioPlayer.stop();
 
-      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song
+      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song from YouTube
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
-
-      // Fail-safe fallback if YouTube search is delayed on slow network
-      if ((streamUrl == null || streamUrl.isEmpty) && song.previewUrl != null && song.previewUrl!.isNotEmpty) {
-        print("YouTube search timeout, using previewUrl fallback: ${song.previewUrl}");
-        streamUrl = song.previewUrl;
-      }
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal mengambil audio untuk '${song.title}'.";
+        _errorMessage = "Gagal mengambil audio YouTube untuk '${song.title}'.";
         notifyListeners();
         return;
       }
 
-      // 3. Set LockCachingAudioSource for instant 0.0s local cache re-play & data saving
-      final audioSource = LockCachingAudioSource(Uri.parse(streamUrl));
+      // 3. Set standard AudioSource.uri for full-length 200 OK playback (NO 30s preview fallbacks)
+      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
 
       await _audioPlayer.setAudioSource(audioSource);
       await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {
       print("Full YouTube Playback error for ${song.title}: $e");
-      // Secondary fail-safe fallback using standard AudioSource.uri
-      if (song.previewUrl != null && song.previewUrl!.isNotEmpty) {
-        try {
-          final fallbackSource = AudioSource.uri(Uri.parse(song.previewUrl!));
-          await _audioPlayer.setAudioSource(fallbackSource);
-          await _audioPlayer.play();
-          _status = PlayerLoadingStatus.playing;
-          notifyListeners();
-          return;
-        } catch (_) {}
-      }
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${song.title}': $e";
     }

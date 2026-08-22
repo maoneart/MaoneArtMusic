@@ -81,10 +81,12 @@ class PlayerStateNotifier extends ChangeNotifier {
 
     _currentSong = song;
     _status = PlayerLoadingStatus.loading;
+    _position = Duration.zero;
+    _duration = Duration.zero;
     _errorMessage = null;
     notifyListeners();
 
-    // Update Android MediaSession / Samsung One UI notification metadata
+    // Update Android MediaSession / Samsung One UI notification metadata immediately
     (globalAudioHandler as MyAudioHandler).updateMediaItem(
       id: song.id,
       title: song.title,
@@ -95,10 +97,10 @@ class PlayerStateNotifier extends ChangeNotifier {
     );
 
     try {
-      // 1. Stop current audio player
+      // 1. Fully stop audio player and clear previous audio buffer pipeline
       await _audioPlayer.stop();
 
-      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song from YouTube
+      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected new song
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
 
       if (streamUrl == null || streamUrl.isEmpty) {
@@ -108,10 +110,10 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 3. Set standard AudioSource.uri for full-length 200 OK playback
+      // 3. Set new AudioSource and force initialPosition to Duration.zero so ExoPlayer plays the NEW stream instantly
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
 
-      await _audioPlayer.setAudioSource(audioSource);
+      await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
       await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {

@@ -29,6 +29,7 @@ class MusicService {
             album: item['collectionName'] ?? 'Single',
             artworkUrl: highResArtwork.isNotEmpty ? highResArtwork : 'https://picsum.photos/600',
             durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
+            previewUrl: item['previewUrl'],
           );
         }).toList();
       }

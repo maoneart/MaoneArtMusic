@@ -9,6 +9,7 @@ class Song {
   final int durationSeconds;
   final String? youtubeId;
   final String? streamUrl;
+  final String? previewUrl;
 
   Song({
     required this.id,
@@ -19,6 +20,7 @@ class Song {
     required this.durationSeconds,
     this.youtubeId,
     this.streamUrl,
+    this.previewUrl,
   });
 
   Song copyWith({
@@ -30,6 +32,7 @@ class Song {
     int? durationSeconds,
     String? youtubeId,
     String? streamUrl,
+    String? previewUrl,
   }) {
     return Song(
       id: id ?? this.id,
@@ -40,6 +43,7 @@ class Song {
       durationSeconds: durationSeconds ?? this.durationSeconds,
       youtubeId: youtubeId ?? this.youtubeId,
       streamUrl: streamUrl ?? this.streamUrl,
+      previewUrl: previewUrl ?? this.previewUrl,
     );
   }
 
@@ -53,6 +57,7 @@ class Song {
       'durationSeconds': durationSeconds,
       'youtubeId': youtubeId,
       'streamUrl': streamUrl,
+      'previewUrl': previewUrl,
     };
   }
 
@@ -66,6 +71,7 @@ class Song {
       durationSeconds: map['durationSeconds']?.toInt() ?? 0,
       youtubeId: map['youtubeId'],
       streamUrl: map['streamUrl'],
+      previewUrl: map['previewUrl'],
     );
   }
 

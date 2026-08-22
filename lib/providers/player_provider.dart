@@ -185,8 +185,15 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Set AudioSource and play
-      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
+      // 7. Set AudioSource with browser headers (prevents mid-song CDN dropouts)
+      final audioSource = AudioSource.uri(
+        Uri.parse(streamUrl),
+        headers: const {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+          'Connection': 'keep-alive',
+        },
+      );
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
       if (_playRequestId != currentRequestId) return;

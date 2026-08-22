@@ -87,7 +87,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       _queue.add(song);
       _currentIndex = _queue.length - 1;
     } else {
-      _currentIndex = _queue.indexWhere((s) => s.id == song.id);
+      _currentIndex = index >= 0 && index < _queue.length ? index : _queue.indexWhere((s) => s.id == song.id);
     }
 
     _currentSong = song;
@@ -151,15 +151,21 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> next() async {
-    if (_queue.isEmpty || _currentIndex >= _queue.length - 1) return;
-    _currentIndex++;
-    await playSong(_queue[_currentIndex]);
+    if (_queue.isEmpty) return;
+    int nextIdx = _currentIndex + 1;
+    if (nextIdx >= _queue.length) {
+      nextIdx = 0; // Loop back to beginning of playlist
+    }
+    await playSong(_queue[nextIdx], index: nextIdx);
   }
 
   Future<void> previous() async {
-    if (_queue.isEmpty || _currentIndex <= 0) return;
-    _currentIndex--;
-    await playSong(_queue[_currentIndex]);
+    if (_queue.isEmpty) return;
+    int prevIdx = _currentIndex - 1;
+    if (prevIdx < 0) {
+      prevIdx = _queue.length - 1; // Loop back to end of playlist
+    }
+    await playSong(_queue[prevIdx], index: prevIdx);
   }
 
   @override

@@ -11,8 +11,10 @@ Future<AudioHandler?> initAudioService() async {
         androidNotificationChannelId: 'com.maoneart.music.channel.audio',
         androidNotificationChannelName: 'MaoneArt Music Playback',
         androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
+        androidStopForegroundOnPause: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
+        androidShowNotificationBadge: true,
+        notificationColor: 0xFF00E5FF,
       ),
     );
     return globalAudioHandler;
@@ -62,6 +64,8 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           MediaAction.seek,
           MediaAction.skipToNext,
           MediaAction.skipToPrevious,
+          MediaAction.play,
+          MediaAction.pause,
         },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: const {

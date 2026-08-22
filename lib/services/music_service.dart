@@ -21,7 +21,7 @@ class MusicService {
     );
   }
 
-  /// Search tracks localized for Indonesian market (country=id) with smart Indonesian band/artist prioritization
+  /// Search tracks localized for Indonesian market (country=id) with strict exact artist & band prioritization
   Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
     if (query.trim().isEmpty) return [];
 
@@ -50,7 +50,28 @@ class MusicService {
       print('Error searching Indo store: $e');
     }
 
-    // 2. Secondary: Fallback / General search if needed
+    // 2. Secondary: If query is single word (like "NOAH"), try searching with "band indonesia" suffix for deeper results
+    if (query.trim().split(' ').length == 1) {
+      try {
+        final bandUri = Uri.parse('$_iTunesSearchUrl?country=id&term=${Uri.encodeComponent('${query.trim()} band')}&media=music&entity=song&limit=15');
+        final bandResponse = await http.get(bandUri).timeout(const Duration(seconds: 5));
+
+        if (bandResponse.statusCode == 200) {
+          final data = json.decode(bandResponse.body);
+          final List results = data['results'] ?? [];
+
+          for (final item in results) {
+            final song = _parseSongItem(item, 'itunes_band');
+            if (!resultsMap.containsKey(song.id)) {
+              resultsMap[song.id] = song;
+              indoList.add(song);
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 3. Fallback: General search if results are scarce
     if (indoList.length < 10) {
       try {
         final genUri = Uri.parse('$_iTunesSearchUrl?term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
@@ -74,24 +95,43 @@ class MusicService {
     }
 
     final combined = [...indoList, ...generalList];
-
-    // Smart Sort: prioritize exact artist/title match (e.g. artist "NOAH", "Peterpan", "Sheila On 7")
     final qLower = query.trim().toLowerCase();
+
+    // Strict Smart Sort:
+    // 1. Exact artist match (e.g. artist "NOAH" == "noah") -> NOAH BAND IS 100% MATCH!
+    // 2. Single-word artist match (e.g. "NOAH" 1 word vs "Noah Cyrus" 2 words)
+    // 3. Title exact match
     combined.sort((a, b) {
-      final aArtistMatch = a.artist.toLowerCase() == qLower;
-      final bArtistMatch = b.artist.toLowerCase() == qLower;
-      if (aArtistMatch && !bArtistMatch) return -1;
-      if (!aArtistMatch && bArtistMatch) return 1;
+      final aArtist = a.artist.trim().toLowerCase();
+      final bArtist = b.artist.trim().toLowerCase();
+      final aTitle = a.title.trim().toLowerCase();
+      final bTitle = b.title.trim().toLowerCase();
 
-      final aArtistStartsWith = a.artist.toLowerCase().startsWith(qLower);
-      final bArtistStartsWith = b.artist.toLowerCase().startsWith(qLower);
-      if (aArtistStartsWith && !bArtistStartsWith) return -1;
-      if (!aArtistStartsWith && bArtistStartsWith) return 1;
+      // 1. Exact artist match (e.g. artist "NOAH" == "noah")
+      final aArtistExact = aArtist == qLower;
+      final bArtistExact = bArtist == qLower;
+      if (aArtistExact && !bArtistExact) return -1;
+      if (!aArtistExact && bArtistExact) return 1;
 
-      final aArtistContains = a.artist.toLowerCase().contains(qLower);
-      final bArtistContains = b.artist.toLowerCase().contains(qLower);
-      if (aArtistContains && !bArtistContains) return -1;
-      if (!aArtistContains && bArtistContains) return 1;
+      // 2. Exact title match
+      final aTitleExact = aTitle == qLower;
+      final bTitleExact = bTitle == qLower;
+      if (aTitleExact && !bTitleExact) return -1;
+      if (!aTitleExact && bTitleExact) return 1;
+
+      // 3. Exact word match in artist name (e.g. "NOAH" 1 word vs "Noah Cyrus" 2 words)
+      final aHasWord = aArtist.split(RegExp(r'\s+')).contains(qLower);
+      final bHasWord = bArtist.split(RegExp(r'\s+')).contains(qLower);
+      if (aHasWord && !bHasWord) return -1;
+      if (!aHasWord && bHasWord) return 1;
+
+      if (aHasWord && bHasWord) {
+        final aWordCount = aArtist.split(RegExp(r'\s+')).length;
+        final bWordCount = bArtist.split(RegExp(r'\s+')).length;
+        if (aWordCount != bWordCount) {
+          return aWordCount.compareTo(bWordCount); // Fewer words (single word band "NOAH") ranked higher!
+        }
+      }
 
       return 0;
     });

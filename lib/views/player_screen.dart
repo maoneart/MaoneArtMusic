@@ -14,7 +14,6 @@ class PlayerScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
-    final libraryState = ref.watch(libraryProvider);
     final song = playerState.currentSong;
 
     if (song == null) {
@@ -56,6 +55,7 @@ class PlayerScreen extends ConsumerWidget {
             child: CachedNetworkImage(
               imageUrl: song.artworkUrl,
               fit: BoxFit.cover,
+              errorWidget: (context, url, error) => Container(color: Colors.black),
             ),
           ),
           Positioned.fill(
@@ -96,6 +96,14 @@ class PlayerScreen extends ConsumerWidget {
                           width: MediaQuery.of(context).size.width * 0.78,
                           height: MediaQuery.of(context).size.width * 0.78,
                           fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: Colors.white.withOpacity(0.1),
+                            child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: Colors.white.withOpacity(0.1),
+                            child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
+                          ),
                         ),
                       ),
                     ),

@@ -40,6 +40,14 @@ class MiniPlayer extends ConsumerWidget {
                   width: 46,
                   height: 46,
                   fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    color: Colors.white.withOpacity(0.1),
+                    child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    color: Colors.white.withOpacity(0.1),
+                    child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
+                  ),
                 ),
               ),
             ),

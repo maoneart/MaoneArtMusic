@@ -21,18 +21,41 @@ class YoutubeAudioExtractor {
     getAudioStreamUrl(song).then((_) {}).catchError((_) {});
   }
 
-  /// Extract highest quality FULL-LENGTH audio stream URL for a song from YouTube (like YouTube Music)
+  /// Extract highest quality FULL-LENGTH audio stream URL for a song from YouTube
   static Future<String?> getAudioStreamUrl(Song song) async {
     // 1. Return cached full-length YouTube URL if valid (max 45 mins)
     if (_streamCache.containsKey(song.id)) {
       final cached = _streamCache[song.id]!;
       if (!cached.isExpired) {
-        print('⚡ Full YouTube stream loaded from cache for: ${song.title}');
+        print('⚡ Full YouTube stream loaded from memory cache for: ${song.title}');
         return cached.url;
       }
     }
 
-    // 2. PRIMARY: Extract FULL-LENGTH audio stream from YouTube using YoutubeExplode
+    // Determine target videoId or search query
+    final String? directVideoId = song.youtubeId;
+
+    // 2. Direct Video ID extraction if available
+    if (directVideoId != null && directVideoId.isNotEmpty) {
+      try {
+        final manifest = await _yt.videos.streamsClient.getManifest(directVideoId).timeout(const Duration(seconds: 5));
+        if (manifest.audioOnly.isNotEmpty) {
+          final audioStreams = manifest.audioOnly.toList();
+          final preferredStream = audioStreams.firstWhere(
+            (s) => s.container.name.toLowerCase().contains('mp4') || s.container.name.toLowerCase().contains('m4a') || s.audioCodec.toLowerCase().contains('mp4a'),
+            orElse: () => manifest.audioOnly.withHighestBitrate(),
+          );
+          final url = preferredStream.url.toString();
+          print('✅ Direct YouTube stream extracted for videoId $directVideoId (${song.title})');
+          _streamCache[song.id] = _CachedStream(url, DateTime.now());
+          return url;
+        }
+      } catch (e) {
+        print('Direct video ID extraction notice for $directVideoId: $e');
+      }
+    }
+
+    // 3. YouTube Explode Search Extraction
     try {
       final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       List<Video> videoList = [];
@@ -49,19 +72,10 @@ class YoutubeAudioExtractor {
       }
 
       if (videoList.isNotEmpty) {
-        // Prioritize full-length tracks (> 60 seconds)
         final candidates = List<Video>.from(
           videoList.where((v) => v.duration == null || v.duration!.inSeconds > 60).take(5),
         );
         if (candidates.isEmpty) candidates.addAll(videoList.take(3));
-
-        candidates.sort((a, b) {
-          final aTopic = a.author.toLowerCase().contains('- topic') || a.title.toLowerCase().contains('audio') || a.title.toLowerCase().contains('official');
-          final bTopic = b.author.toLowerCase().contains('- topic') || b.title.toLowerCase().contains('audio') || b.title.toLowerCase().contains('official');
-          if (aTopic && !bTopic) return -1;
-          if (!aTopic && bTopic) return 1;
-          return 0;
-        });
 
         for (final selectedVideo in candidates) {
           try {
@@ -91,12 +105,12 @@ class YoutubeAudioExtractor {
         }
       }
     } catch (e) {
-      print('YouTube full stream extraction notice for ${song.title}: $e');
+      print('YouTube full stream search notice for ${song.title}: $e');
     }
 
-    // 3. SECONDARY: Invidious REST API fallback for Full-Length Audio Stream
+    // 4. Invidious REST API fallback for Full-Length Audio Stream
     try {
-      final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
+      final targetId = directVideoId ?? song.id.replaceAll('yt_', '').replaceAll('yt_search_', '').replaceAll('yt_inv_', '');
       final invidiousInstances = [
         'https://inv.tux.pizza',
         'https://invidious.nerdvpn.de',
@@ -105,34 +119,21 @@ class YoutubeAudioExtractor {
 
       for (final instance in invidiousInstances) {
         try {
-          final searchRes = await http.get(Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent(searchQuery)}&type=video')).timeout(const Duration(seconds: 3));
-          if (searchRes.statusCode == 200) {
-            final List results = json.decode(searchRes.body);
-            if (results.isNotEmpty) {
-              final videoId = results.first['videoId'];
-              final videoRes = await http.get(Uri.parse('$instance/api/v1/videos/$videoId')).timeout(const Duration(seconds: 3));
-              if (videoRes.statusCode == 200) {
-                final data = json.decode(videoRes.body);
-                final List adaptive = data['adaptiveFormats'] ?? [];
-                final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
-                if (audioStreams.isNotEmpty) {
-                  final fullUrl = audioStreams.first['url'].toString();
-                  print('✅ Invidious Full-Length Stream URL: ${song.title}');
-                  _streamCache[song.id] = _CachedStream(fullUrl, DateTime.now());
-                  return fullUrl;
-                }
-              }
+          final videoRes = await http.get(Uri.parse('$instance/api/v1/videos/$targetId')).timeout(const Duration(seconds: 3));
+          if (videoRes.statusCode == 200) {
+            final data = json.decode(videoRes.body);
+            final List adaptive = data['adaptiveFormats'] ?? [];
+            final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
+            if (audioStreams.isNotEmpty) {
+              final fullUrl = audioStreams.first['url'].toString();
+              print('✅ Invidious Full-Length Stream URL: ${song.title}');
+              _streamCache[song.id] = _CachedStream(fullUrl, DateTime.now());
+              return fullUrl;
             }
           }
         } catch (_) {}
       }
     } catch (_) {}
-
-    // 4. TERTIARY / EMERGENCY FALLBACK: Only if full-length YouTube extraction fails completely, use song.streamUrl
-    if (song.streamUrl != null && song.streamUrl!.isNotEmpty) {
-      print('⚠️ Emergency Fallback Audio Stream for: ${song.title}');
-      return song.streamUrl;
-    }
 
     return null;
   }

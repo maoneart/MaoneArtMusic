@@ -1,282 +1,110 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 
 class MusicService {
-  static const String _iTunesSearchUrl = 'https://itunes.apple.com/search';
+  static final YoutubeExplode _yt = YoutubeExplode();
 
-  Song _parseSongItem(dynamic item, String prefix) {
-    final String rawArtwork = item['artworkUrl100'] ?? item['artworkUrl60'] ?? item['artworkUrl30'] ?? '';
-    final String highResArtwork = rawArtwork.isNotEmpty
-        ? rawArtwork.replaceAll('100x100bb', '600x600bb').replaceAll('100x100', '600x600').replaceAll('60x60bb', '600x600bb')
-        : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
+  /// Convert YouTube Video object to Song instance
+  Song _videoToSong(Video video, {String prefix = 'yt'}) {
+    final videoId = video.id.value;
+    final highResArtwork = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
+    final int duration = video.duration?.inSeconds ?? 240;
 
     return Song(
-      id: '${prefix}_${item['trackId']}',
-      title: item['trackName'] ?? 'Unknown Track',
-      artist: item['artistName'] ?? 'Unknown Artist',
-      album: item['collectionName'] ?? 'Single',
+      id: '${prefix}_$videoId',
+      title: video.title,
+      artist: video.author,
+      album: 'YouTube Music',
       artworkUrl: highResArtwork,
-      durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
-      streamUrl: item['previewUrl'],
+      durationSeconds: duration,
+      youtubeId: videoId,
+      streamUrl: null, // Pure YouTube full-length audio stream!
     );
   }
 
-  /// Search tracks localized for Indonesian market (country=id) with strict exact artist & band prioritization
+  /// Search songs directly on YouTube Music / YouTube with duration filtering & smart sorting
   Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
     if (query.trim().isEmpty) return [];
-
-    final Map<String, Song> resultsMap = {};
-    final List<Song> indoList = [];
-    final List<Song> generalList = [];
+    final List<Song> songList = [];
+    final Set<String> addedIds = {};
 
     try {
-      // 1. Primary: Search iTunes Indonesian Store (country=id)
-      final indoUri = Uri.parse('$_iTunesSearchUrl?country=id&term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
-      final indoResponse = await http.get(indoUri).timeout(const Duration(seconds: 8));
-
-      if (indoResponse.statusCode == 200) {
-        final data = json.decode(indoResponse.body);
-        final List results = data['results'] ?? [];
-
-        for (final item in results) {
-          final song = _parseSongItem(item, 'itunes_id');
-          if (!resultsMap.containsKey(song.id)) {
-            resultsMap[song.id] = song;
-            indoList.add(song);
-          }
+      // 1. Try YoutubeExplode search
+      final searchResults = await _yt.search.search(query).timeout(const Duration(seconds: 5));
+      for (final video in searchResults.whereType<Video>()) {
+        final videoId = video.id.value;
+        if (!addedIds.contains(videoId)) {
+          addedIds.add(videoId);
+          songList.add(_videoToSong(video, prefix: 'yt_search'));
         }
       }
     } catch (e) {
-      print('Error searching Indo store: $e');
+      print('YouTube Explode search notice: $e');
     }
 
-    // 2. Secondary: If query is single word (like "NOAH"), try searching with "band indonesia" suffix for deeper results
-    if (query.trim().split(' ').length == 1) {
-      try {
-        final bandUri = Uri.parse('$_iTunesSearchUrl?country=id&term=${Uri.encodeComponent('${query.trim()} band')}&media=music&entity=song&limit=15');
-        final bandResponse = await http.get(bandUri).timeout(const Duration(seconds: 5));
+    // 2. Invidious REST API Search fallback for maximum reliability
+    if (songList.length < 5) {
+      final invidiousInstances = [
+        'https://inv.tux.pizza',
+        'https://invidious.nerdvpn.de',
+        'https://yewtu.be',
+      ];
 
-        if (bandResponse.statusCode == 200) {
-          final data = json.decode(bandResponse.body);
-          final List results = data['results'] ?? [];
+      for (final mirror in invidiousInstances) {
+        try {
+          final uri = Uri.parse('$mirror/api/v1/search?q=${Uri.encodeComponent(query)}&type=video');
+          final res = await http.get(uri).timeout(const Duration(seconds: 4));
+          if (res.statusCode == 200) {
+            final List items = json.decode(res.body);
+            for (final item in items) {
+              final videoId = item['videoId'];
+              if (videoId != null && !addedIds.contains(videoId)) {
+                addedIds.add(videoId);
+                final String title = item['title'] ?? 'Unknown Track';
+                final String author = item['author'] ?? 'YouTube Music';
+                final int duration = item['lengthSeconds']?.toInt() ?? 240;
+                final String artwork = 'https://i.ytimg.com/vi/$videoId/hqdefault.jpg';
 
-          for (final item in results) {
-            final song = _parseSongItem(item, 'itunes_band');
-            if (!resultsMap.containsKey(song.id)) {
-              resultsMap[song.id] = song;
-              indoList.add(song);
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 3. Fallback: General search if results are scarce
-    if (indoList.length < 10) {
-      try {
-        final genUri = Uri.parse('$_iTunesSearchUrl?term=${Uri.encodeComponent(query)}&media=music&entity=song&limit=$limit');
-        final genResponse = await http.get(genUri).timeout(const Duration(seconds: 8));
-
-        if (genResponse.statusCode == 200) {
-          final data = json.decode(genResponse.body);
-          final List results = data['results'] ?? [];
-
-          for (final item in results) {
-            final song = _parseSongItem(item, 'itunes_gen');
-            if (!resultsMap.containsKey(song.id)) {
-              resultsMap[song.id] = song;
-              generalList.add(song);
-            }
-          }
-        }
-      } catch (e) {
-        print('Error searching General store: $e');
-      }
-    }
-
-    final combined = [...indoList, ...generalList];
-    final qLower = query.trim().toLowerCase();
-
-    // Strict Smart Sort:
-    // 1. Exact artist match (e.g. artist "NOAH" == "noah") -> NOAH BAND IS 100% MATCH!
-    // 2. Single-word artist match (e.g. "NOAH" 1 word vs "Noah Cyrus" 2 words)
-    // 3. Title exact match
-    combined.sort((a, b) {
-      final aArtist = a.artist.trim().toLowerCase();
-      final bArtist = b.artist.trim().toLowerCase();
-      final aTitle = a.title.trim().toLowerCase();
-      final bTitle = b.title.trim().toLowerCase();
-
-      // 1. Exact artist match (e.g. artist "NOAH" == "noah")
-      final aArtistExact = aArtist == qLower;
-      final bArtistExact = bArtist == qLower;
-      if (aArtistExact && !bArtistExact) return -1;
-      if (!aArtistExact && bArtistExact) return 1;
-
-      // 2. Exact title match
-      final aTitleExact = aTitle == qLower;
-      final bTitleExact = bTitle == qLower;
-      if (aTitleExact && !bTitleExact) return -1;
-      if (!aTitleExact && bTitleExact) return 1;
-
-      // 3. Exact word match in artist name (e.g. "NOAH" 1 word vs "Noah Cyrus" 2 words)
-      final aHasWord = aArtist.split(RegExp(r'\s+')).contains(qLower);
-      final bHasWord = bArtist.split(RegExp(r'\s+')).contains(qLower);
-      if (aHasWord && !bHasWord) return -1;
-      if (!aHasWord && bHasWord) return 1;
-
-      if (aHasWord && bHasWord) {
-        final aWordCount = aArtist.split(RegExp(r'\s+')).length;
-        final bWordCount = bArtist.split(RegExp(r'\s+')).length;
-        if (aWordCount != bWordCount) {
-          return aWordCount.compareTo(bWordCount); // Fewer words (single word band "NOAH") ranked higher!
-        }
-      }
-
-      return 0;
-    });
-
-    return combined;
-  }
-
-  /// Fetch real-time iTunes Top Songs RSS Feed (Indonesia / Global)
-  Future<List<Song>> getItunesRssTrending({String country = 'id', int limit = 30}) async {
-    try {
-      final uri = Uri.parse('https://itunes.apple.com/$country/rss/topsongs/limit=$limit/json');
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List entries = data['feed']?['entry'] ?? [];
-
-        return entries.map((item) {
-          final String title = item['im:name']?['label'] ?? 'Unknown Title';
-          final String artist = item['im:artist']?['label'] ?? 'Unknown Artist';
-          final String album = item['im:collection']?['im:name']?['label'] ?? 'Single';
-
-          final List images = item['im:image'] ?? [];
-          final String rawArtwork = images.isNotEmpty ? images.last['label'] ?? '' : '';
-          final String highResArtwork = rawArtwork.isNotEmpty
-              ? rawArtwork.replaceAll('170x170bb', '600x600bb').replaceAll('100x100bb', '600x600bb').replaceAll('55x55bb', '600x600bb')
-              : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80';
-
-          final String trackId = item['id']?['attributes']?['im:id'] ?? '${title}_$artist'.hashCode.toString();
-
-          String previewUrl = '';
-          final dynamic rawLink = item['link'];
-          if (rawLink is List) {
-            for (final l in rawLink) {
-              final String href = l['attributes']?['href'] ?? '';
-              if (href.contains('audio-ssl.itunes.apple.com') || href.contains('.m4a') || l['attributes']?['rel'] == 'enclosure') {
-                previewUrl = href;
-                break;
+                songList.add(Song(
+                  id: 'yt_inv_$videoId',
+                  title: title,
+                  artist: author,
+                  album: 'YouTube Music',
+                  artworkUrl: artwork,
+                  durationSeconds: duration,
+                  youtubeId: videoId,
+                  streamUrl: null,
+                ));
               }
             }
-          } else if (rawLink is Map) {
-            previewUrl = rawLink['attributes']?['href'] ?? '';
+            if (songList.isNotEmpty) break;
           }
-
-          return Song(
-            id: 'itunes_rss_${country}_$trackId',
-            title: title,
-            artist: artist,
-            album: album,
-            artworkUrl: highResArtwork,
-            durationSeconds: 210,
-            streamUrl: previewUrl.isNotEmpty ? previewUrl : null,
-          );
-        }).toList();
+        } catch (_) {}
       }
-    } catch (e) {
-      print('Error fetching iTunes RSS trending ($country): $e');
     }
-    return [];
+
+    return songList.take(limit).toList();
   }
 
-  /// Fetch Deezer Top Global Charts
-  Future<List<Song>> getDeezerChart({int limit = 25}) async {
-    try {
-      final uri = Uri.parse('https://api.deezer.com/chart/0/tracks?limit=$limit');
-      final response = await http.get(uri).timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List tracks = data['data'] ?? [];
-
-        return tracks.map((item) {
-          final String rawArtwork = item['album']?['cover_big'] ?? item['album']?['cover_medium'] ?? '';
-
-          return Song(
-            id: 'deezer_${item['id']}',
-            title: item['title'] ?? 'Unknown Title',
-            artist: item['artist']?['name'] ?? 'Unknown Artist',
-            album: item['album']?['title'] ?? 'Single',
-            artworkUrl: rawArtwork.isNotEmpty ? rawArtwork : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
-            durationSeconds: item['duration'] ?? 180,
-            streamUrl: item['preview'],
-          );
-        }).toList();
-      }
-    } catch (e) {
-      print('Error fetching Deezer charts: $e');
-    }
-    return [];
-  }
-
-  /// Get top trending songs / charts combined from live iTunes Top Charts & Deezer
+  /// Fetch top trending music videos & songs directly from YouTube Music / YouTube
   Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
-    final Map<String, Song> uniqueSongs = {};
-
+    String searchQuery;
     if (category == 'Indonesia') {
-      final indoRss = await getItunesRssTrending(country: 'id', limit: 30);
-      for (final s in indoRss) {
-        uniqueSongs[s.id] = s;
-      }
-      if (uniqueSongs.length < 15) {
-        final searchIndo = await searchSongs('Lagu Pop Indonesia Terbaru 2026', limit: 15);
-        for (final s in searchIndo) {
-          uniqueSongs[s.id] = s;
-        }
-      }
+      searchQuery = 'Lagu Indonesia Populer Terbaru 2026';
     } else if (category == 'Global') {
-      final globalRss = await getItunesRssTrending(country: 'us', limit: 25);
-      for (final s in globalRss) {
-        uniqueSongs[s.id] = s;
-      }
-      final deezer = await getDeezerChart(limit: 20);
-      for (final s in deezer) {
-        uniqueSongs[s.id] = s;
-      }
+      searchQuery = 'Top Global Songs 2026 Official Audio';
     } else if (category == 'Viral TikTok') {
-      final tiktokHits = await searchSongs('Viral TikTok Song Hits', limit: 25);
-      for (final s in tiktokHits) {
-        uniqueSongs[s.id] = s;
-      }
+      searchQuery = 'Lagu TikTok Viral Terbaru 2026';
     } else {
-      // Default 'Trending' (Mix of Indo & Global Top Hits)
-      final indoRss = await getItunesRssTrending(country: 'id', limit: 20);
-      for (final s in indoRss) {
-        uniqueSongs[s.id] = s;
-      }
-      final globalRss = await getItunesRssTrending(country: 'us', limit: 15);
-      for (final s in globalRss) {
-        uniqueSongs[s.id] = s;
-      }
-      final deezer = await getDeezerChart(limit: 15);
-      for (final s in deezer) {
-        uniqueSongs[s.id] = s;
-      }
+      searchQuery = 'Trending Music Indonesia Top Hits 2026';
     }
 
-    // Fallback if APIs failed
-    if (uniqueSongs.isEmpty) {
-      final fallback = await searchSongs('Bernadya Mahalini Juicy Luicy Tulus', limit: 20);
-      for (final s in fallback) {
-        uniqueSongs[s.id] = s;
-      }
-    }
+    final songs = await searchSongs(searchQuery, limit: 30);
+    if (songs.isNotEmpty) return songs;
 
-    return uniqueSongs.values.toList();
+    // Emergency fallback search
+    return searchSongs('NOAH Bernadya Mahalini Juicy Luicy Tulus', limit: 20);
   }
 }

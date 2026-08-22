@@ -48,8 +48,12 @@ class PlayerStateNotifier extends ChangeNotifier {
         next();
       } else if (state.playing) {
         _status = PlayerLoadingStatus.playing;
-      } else {
-        _status = PlayerLoadingStatus.paused;
+      } else if (state.processingState == ProcessingState.ready) {
+        if (state.playing) {
+          _status = PlayerLoadingStatus.playing;
+        } else {
+          _status = PlayerLoadingStatus.paused;
+        }
       }
       notifyListeners();
     });
@@ -73,7 +77,10 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Resolve Audio Stream from YouTube
+      // 1. Stop current audio if playing
+      await _audioPlayer.stop();
+
+      // 2. Resolve Audio Stream from YouTube
       String? streamUrl = song.streamUrl;
       if (streamUrl == null || streamUrl.isEmpty) {
         streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
@@ -86,8 +93,16 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 2. Play audio stream via just_audio
-      await _audioPlayer.setUrl(streamUrl);
+      // 3. Play audio stream via just_audio with YouTube CDN headers
+      final audioSource = AudioSource.uri(
+        Uri.parse(streamUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://www.youtube.com/',
+        },
+      );
+
+      await _audioPlayer.setAudioSource(audioSource);
       await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {

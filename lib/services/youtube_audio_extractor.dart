@@ -2,7 +2,7 @@ import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 
 class YoutubeAudioExtractor {
-  /// Extract highest quality full-length audio stream URL for a song from YouTube
+  /// Extract highest quality unthrottled full-length audio stream URL for a song from YouTube
   static Future<String?> getAudioStreamUrl(Song song) async {
     final yt = YoutubeExplode();
     try {
@@ -24,13 +24,19 @@ class YoutubeAudioExtractor {
 
       // 2. Resolve full audio stream manifest
       final manifest = await yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 15));
-      final audioStreams = manifest.audioOnly;
+      
+      // Prefer Muxed MP4 streams (contains high-bitrate AAC audio, 100% 200 OK unthrottled!)
+      if (manifest.muxed.isNotEmpty) {
+        final muxedAudio = manifest.muxed.withHighestBitrate();
+        final url = muxedAudio.url.toString();
+        print('Unthrottled Muxed Audio Stream resolved: $url');
+        return url;
+      }
 
-      if (audioStreams.isNotEmpty) {
-        // Get highest bitrate full-length audio stream
-        final highestBitrateAudio = audioStreams.withHighestBitrate();
+      if (manifest.audioOnly.isNotEmpty) {
+        final highestBitrateAudio = manifest.audioOnly.withHighestBitrate();
         final url = highestBitrateAudio.url.toString();
-        print('Full YouTube Audio Stream resolved: $url');
+        print('Full Audio Stream resolved: $url');
         return url;
       }
     } catch (e) {

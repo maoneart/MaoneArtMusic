@@ -80,7 +80,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 1. Stop current audio player
       await _audioPlayer.stop();
 
-      // 2. Resolve FULL-LENGTH Audio Stream specifically for the selected song from YouTube
+      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
 
       if (streamUrl == null || streamUrl.isEmpty) {
@@ -90,13 +90,8 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 3. Set full YouTube audio stream source
-      final audioSource = AudioSource.uri(
-        Uri.parse(streamUrl),
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Android; Mobile)',
-        },
-      );
+      // 3. Set unthrottled audio stream source for ExoPlayer
+      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
 
       await _audioPlayer.setAudioSource(audioSource);
       await _audioPlayer.play();

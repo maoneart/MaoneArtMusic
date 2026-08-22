@@ -38,7 +38,7 @@ class HomeScreen extends ConsumerWidget {
                             "MaoneArt Music",
                             style: TextStyle(
                               fontSize: 24,
-                              fontWeight: FontWeight.extrabold,
+                              fontWeight: FontWeight.w800,
                               foreground: Paint()
                                 ..shader = const LinearGradient(
                                   colors: [MaoneArtTheme.primaryCyan, MaoneArtTheme.accentGreen],
@@ -145,9 +145,11 @@ class HomeScreen extends ConsumerWidget {
 
                 // Songs List
                 if (musicState.trendingSongs.isEmpty && musicState.isLoadingTrending)
-                  const Center(
+                  const Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan),
+                    child: Center(
+                      child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan),
+                    ),
                   )
                 else
                   ListView.builder(

@@ -33,35 +33,21 @@ Aplikasi streaming musik open-source berbasis **Flutter** dengan tampilan **Maon
 
 ---
 
-## 🚀 Cara Build ke APK Android
+## ⚡ CATATAN UPDATE & BUILD APK OTOMATIS (Cukup 1 Perintah)
 
-### **Cara 1: Otomatis via GitHub Actions (Rekomendasi Utama & Paling Mudah)**
-Proyek ini sudah dilengkapi dengan `.github/workflows/build_apk.yml`.
-1. Upload/Push folder `/sdcard/www/MaoneArtMusic` ke repositori GitHub Anda.
-2. GitHub secara otomatis akan memproses build APK saat push selesai.
-3. Buka tab **Actions** di GitHub -> Pilih workflow -> Download file **MaoneArtMusic-APKs.zip** yang berisi file `.apk` siap install di Android!
+**Anda TIDAK Perlu Lagi Membuat Perintah Build Manual di GitHub Web!**
 
----
+Cukup buka terminal di Termux, masuk ke folder proyek, dan jalankan perintah:
 
-### **Cara 2: Build Manual di Laptop / PC (Flutter CLI)**
-Jika Anda memiliki laptop/PC dengan Flutter SDK & Android Studio terinstall:
-1. Salin folder `MaoneArtMusic` ke PC.
-2. Buka terminal di folder proyek, lalu jalankan:
-   ```bash
-   flutter pub get
-   flutter build apk --release
-   ```
-3. File APK akan terbentuk di:
-   `build/app/outputs/flutter-apk/app-release.apk`
+```bash
+cd /sdcard/www/MaoneArtMusic
+./update_app.sh "pesan update bug anda"
+```
 
----
-
-### **Cara 3: Build Langsung di Android (Termux PRoot Ubuntu)**
-Jika ingin build APK di dalam Termux Android:
-1. Install PRoot Ubuntu di Termux: `pkg install proot-distro && proot-distro install ubuntu`
-2. Masuk ke Ubuntu: `proot-distro login ubuntu`
-3. Install OpenJDK 17 & Flutter SDK di Ubuntu.
-4. Jalankan `flutter build apk --release`.
+### **Apa yang Dilakukan Perintah Tersebut secara Otomatis?**
+1. **Push ke GitHub**: Otomatis menyimpan commit & push ke repository `https://github.com/maoneart/MaoneArtMusic`.
+2. **GitHub Actions Auto-Build**: GitHub akan **otomatis mem-build APK secara cloud** setiap kali ada `push` di branch `main` tanpa perlu mengeklik apa-apa. Hasil APK otomatis tersedia di menu **Releases** & **Actions** di GitHub.
+3. **Save ke Folder Download**: Script ini juga langsung mem-build & menyimpan file APK ke folder HP Anda di `/sdcard/Download/MaoneArtMusic.apk`.
 
 ---
 

@@ -5,6 +5,8 @@ class MaoneArtTheme {
   static const Color primaryCyan = Color(0xFF00F0FF);
   static const Color primaryPurple = Color(0xFF9D00FF);
   static const Color accentGreen = Color(0xFF00FF9D);
+  static const Color spotifyGreen = Color(0xFF1DB954);
+  static const Color spotifyGreenBright = Color(0xFF1ED760);
   static const Color bgDark = Color(0xFF0B0F19);
   static const Color cardGlass = Color(0x1AFFFFFF);
   static const Color cardGlassBorder = Color(0x33FFFFFF);

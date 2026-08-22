@@ -5,6 +5,7 @@ import '../providers/player_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../views/player_screen.dart';
 import 'glass_container.dart';
+import 'app_artwork.dart';
 
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({Key? key}) : super(key: key);
@@ -33,22 +34,11 @@ class MiniPlayer extends ConsumerWidget {
             // Artwork
             Hero(
               tag: 'player_artwork',
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: CachedNetworkImage(
-                  imageUrl: song.artworkUrl,
-                  width: 46,
-                  height: 46,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.white.withOpacity(0.1),
-                    child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.white.withOpacity(0.1),
-                    child: const Icon(Icons.music_note, color: Colors.white54, size: 24),
-                  ),
-                ),
+              child: AppArtwork(
+                artworkUrl: song.artworkUrl,
+                width: 46,
+                height: 46,
+                borderRadius: 12,
               ),
             ),
             const SizedBox(width: 12),

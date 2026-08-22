@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
 import '../theme/maoneart_theme.dart';
 import 'glass_container.dart';
+import 'app_artwork.dart';
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -68,22 +69,11 @@ class SongTile extends StatelessWidget {
             // Track Artwork with Playing Indicator Overlay
             Stack(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: CachedNetworkImage(
-                    imageUrl: song.artworkUrl,
-                    width: 52,
-                    height: 52,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      color: Colors.white.withOpacity(0.1),
-                      child: const Icon(Icons.music_note, color: Colors.white54),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      color: Colors.white.withOpacity(0.1),
-                      child: const Icon(Icons.music_note, color: Colors.white54),
-                    ),
-                  ),
+                AppArtwork(
+                  artworkUrl: song.artworkUrl,
+                  width: 52,
+                  height: 52,
+                  borderRadius: 10,
                 ),
                 if (isPlaying)
                   Positioned.fill(

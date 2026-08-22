@@ -7,6 +7,7 @@ import '../providers/library_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/seek_bar.dart';
+import '../widgets/app_artwork.dart';
 
 class PlayerScreen extends ConsumerWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -91,39 +92,12 @@ class PlayerScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(24),
-                        child: song.artworkUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: song.artworkUrl,
-                                width: MediaQuery.of(context).size.width * 0.78,
-                                height: MediaQuery.of(context).size.width * 0.78,
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Container(
-                                  color: Colors.white.withOpacity(0.1),
-                                  child: const Icon(Icons.music_note, color: Colors.white54, size: 64),
-                                ),
-                                errorWidget: (context, url, error) => Container(
-                                  width: MediaQuery.of(context).size.width * 0.78,
-                                  height: MediaQuery.of(context).size.width * 0.78,
-                                  decoration: const BoxDecoration(
-                                    gradient: LinearGradient(
-                                      colors: [MaoneArtTheme.spotifyGreen, MaoneArtTheme.primaryPurple],
-                                    ),
-                                  ),
-                                  child: const Icon(Icons.music_note, color: Colors.white, size: 80),
-                                ),
-                              )
-                            : Container(
-                                width: MediaQuery.of(context).size.width * 0.78,
-                                height: MediaQuery.of(context).size.width * 0.78,
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [MaoneArtTheme.spotifyGreen, MaoneArtTheme.primaryPurple],
-                                  ),
-                                ),
-                                child: const Icon(Icons.music_note, color: Colors.white, size: 80),
-                              ),
+                      child: AppArtwork(
+                        artworkUrl: song.artworkUrl,
+                        width: MediaQuery.of(context).size.width * 0.78,
+                        height: MediaQuery.of(context).size.width * 0.78,
+                        borderRadius: 24,
+                        iconSize: 80,
                       ),
                     ),
                   ),

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -14,7 +15,7 @@ Future<AudioHandler?> initAudioService() async {
         androidStopForegroundOnPause: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
         androidShowNotificationBadge: true,
-        notificationColor: 0xFF00E5FF,
+        notificationColor: Color(0xFF00E5FF),
       ),
     );
     return globalAudioHandler;

@@ -72,11 +72,6 @@ class PlayerStateNotifier extends ChangeNotifier {
     });
 
     _audioPlayer.playerStateStream.listen((state) {
-      // Do not overwrite UI status while loading a new track
-      if (_status == PlayerLoadingStatus.loading) {
-        return;
-      }
-
       if (state.processingState == ProcessingState.completed) {
         // ONLY advance to next song if track played to end (within 5 seconds of duration)
         if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 5) {
@@ -84,10 +79,12 @@ class PlayerStateNotifier extends ChangeNotifier {
         } else {
           _status = PlayerLoadingStatus.paused;
         }
-      } else if (state.playing) {
+      } else if (state.playing && state.processingState == ProcessingState.ready) {
         _status = PlayerLoadingStatus.playing;
-      } else if (state.processingState == ProcessingState.ready) {
-        _status = state.playing ? PlayerLoadingStatus.playing : PlayerLoadingStatus.paused;
+      } else if (state.processingState == ProcessingState.ready && !state.playing) {
+        _status = PlayerLoadingStatus.paused;
+      } else if (state.processingState == ProcessingState.buffering) {
+        _status = PlayerLoadingStatus.loading;
       }
       notifyListeners();
     });
@@ -183,26 +180,21 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Set AudioSource with browser headers (prevents mid-song CDN dropouts)
-      final audioSource = AudioSource.uri(
-        Uri.parse(streamUrl),
-        headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': '*/*',
-          'Connection': 'keep-alive',
-        },
-      );
+      // 7. Set AudioSource and start playing
+      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
       if (_playRequestId != currentRequestId) return;
 
-      await _audioPlayer.play();
+      _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
+      notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
       print("Full YouTube Playback error for ${_currentSong?.title}: $e");
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${_currentSong?.title}': $e";
+      notifyListeners();
     }
     notifyListeners();
   }

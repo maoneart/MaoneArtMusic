@@ -6,6 +6,7 @@ import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/song_tile.dart';
 import 'search_screen.dart';
+import 'player_screen.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -169,6 +170,9 @@ class HomeScreen extends ConsumerWidget {
                                 newQueue: musicState.trendingSongs,
                                 index: index,
                               );
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                          );
                         },
                       );
                     },

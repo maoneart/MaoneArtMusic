@@ -5,6 +5,7 @@ import '../providers/player_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/song_tile.dart';
+import 'player_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({Key? key}) : super(key: key);
@@ -53,6 +54,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.white),
                     onPressed: () {
+                      FocusScope.of(context).unfocus();
                       if (Navigator.of(context).canPop()) {
                         Navigator.of(context).pop();
                       } else {
@@ -123,7 +125,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         cat,
                         style: const TextStyle(color: Colors.white, fontSize: 13),
                       ),
-                      onPressed: () => _triggerSearch(cat),
+                      onPressed: () {
+                        FocusScope.of(context).unfocus();
+                        _triggerSearch(cat);
+                      },
                     );
                   }).toList(),
                 ),
@@ -144,6 +149,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           ),
                         )
                       : ListView.builder(
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                           padding: const EdgeInsets.only(bottom: 90, top: 8),
                           itemCount: musicState.searchResults.length,
                           itemBuilder: (context, index) {
@@ -154,11 +160,15 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               song: song,
                               isPlaying: isPlaying,
                               onTap: () {
+                                FocusScope.of(context).unfocus();
                                 ref.read(playerProvider).playSong(
                                       song,
                                       newQueue: musicState.searchResults,
                                       index: index,
                                     );
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                                );
                               },
                             );
                           },

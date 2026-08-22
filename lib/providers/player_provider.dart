@@ -80,49 +80,49 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 1. Stop current audio
       await _audioPlayer.stop();
 
-      // 2. Resolve Audio Stream from Piped / YouTube / iTunes Preview
+      // 2. Resolve FULL-LENGTH Audio Stream from YouTube
       String? streamUrl = song.streamUrl;
       if (streamUrl == null || streamUrl.isEmpty) {
         streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
       }
 
+      // Fallback to previewUrl only if YouTube stream resolution fails
       if ((streamUrl == null || streamUrl.isEmpty) && song.previewUrl != null) {
         streamUrl = song.previewUrl;
       }
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal mengekstrak audio lagu.";
+        _errorMessage = "Gagal mengekstrak audio lagu dari YouTube.";
         notifyListeners();
         return;
       }
 
-      // 3. Try playing stream URL
-      try {
-        final audioSource = AudioSource.uri(
-          Uri.parse(streamUrl),
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Referer': 'https://www.youtube.com/',
-          },
-        );
+      // 3. Play full audio stream via just_audio
+      final audioSource = AudioSource.uri(
+        Uri.parse(streamUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Referer': 'https://www.youtube.com/',
+        },
+      );
 
-        await _audioPlayer.setAudioSource(audioSource);
-        await _audioPlayer.play();
-        _status = PlayerLoadingStatus.playing;
-      } catch (e) {
-        print("Primary stream failed, attempting fallback to previewUrl: $e");
-        if (song.previewUrl != null && song.previewUrl!.isNotEmpty && streamUrl != song.previewUrl) {
+      await _audioPlayer.setAudioSource(audioSource);
+      await _audioPlayer.play();
+      _status = PlayerLoadingStatus.playing;
+    } catch (e) {
+      print("Playback error: $e");
+      // If primary YouTube stream fails, attempt previewUrl
+      if (song.previewUrl != null && song.previewUrl!.isNotEmpty) {
+        try {
           final fallbackSource = AudioSource.uri(Uri.parse(song.previewUrl!));
           await _audioPlayer.setAudioSource(fallbackSource);
           await _audioPlayer.play();
           _status = PlayerLoadingStatus.playing;
-        } else {
-          rethrow;
-        }
+          notifyListeners();
+          return;
+        } catch (_) {}
       }
-    } catch (e) {
-      print("Playback error: $e");
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar lagu: $e";
     }

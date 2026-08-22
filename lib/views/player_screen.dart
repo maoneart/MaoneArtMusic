@@ -160,15 +160,18 @@ class PlayerScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.shuffle, color: Colors.white70),
-                        onPressed: () {},
+                        icon: Icon(
+                          Icons.shuffle,
+                          color: playerState.isShuffle ? MaoneArtTheme.primaryCyan : Colors.white70,
+                        ),
+                        onPressed: () => ref.read(playerProvider).toggleShuffle(),
                       ),
                       IconButton(
                         icon: const Icon(Icons.skip_previous, size: 36, color: Colors.white),
                         onPressed: () => ref.read(playerProvider).previous(),
                       ),
 
-                      // Play/Pause Button
+                      // Play/Pause/Loading Button
                       GestureDetector(
                         onTap: () => ref.read(playerProvider).togglePlayPause(),
                         child: Container(
@@ -187,11 +190,19 @@ class PlayerScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-                            size: 36,
-                            color: Colors.black,
-                          ),
+                          child: playerState.status == PlayerLoadingStatus.loading
+                              ? const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    color: Colors.black,
+                                  ),
+                                )
+                              : Icon(
+                                  playerState.isPlaying ? Icons.pause : Icons.play_arrow,
+                                  size: 36,
+                                  color: Colors.black,
+                                ),
                         ),
                       ),
 
@@ -200,8 +211,15 @@ class PlayerScreen extends ConsumerWidget {
                         onPressed: () => ref.read(playerProvider).next(),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.repeat, color: Colors.white70),
-                        onPressed: () {},
+                        icon: Icon(
+                          playerState.repeatMode == RepeatMode.one
+                              ? Icons.repeat_one
+                              : Icons.repeat,
+                          color: playerState.repeatMode != RepeatMode.off
+                              ? MaoneArtTheme.primaryCyan
+                              : Colors.white70,
+                        ),
+                        onPressed: () => ref.read(playerProvider).toggleRepeatMode(),
                       ),
                     ],
                   ),

@@ -97,7 +97,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Musify-style Playback Engine (Instant UI response & YouTube stream extraction)
+  /// Musify-style Full-Length Playback Engine (100% Full-Length YouTube Streams)
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
@@ -130,8 +130,8 @@ class PlayerStateNotifier extends ChangeNotifier {
       );
     }
 
-    // 3. Instant UI feedback (Musify style: set to playing state immediately!)
-    _status = PlayerLoadingStatus.playing;
+    // 3. Instant UI feedback
+    _status = PlayerLoadingStatus.loading;
     _position = Duration.zero;
     _duration = Duration(seconds: _currentSong!.durationSeconds);
     _errorMessage = null;
@@ -146,27 +146,19 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
 
     try {
-      // 5. Asynchronously extract stream URL (YouTube / Audio CDN)
-      String? streamUrl;
-      try {
-        streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!).timeout(const Duration(seconds: 4));
-      } catch (_) {}
-
-      if ((streamUrl == null || streamUrl.isEmpty) && song.streamUrl != null && song.streamUrl!.isNotEmpty) {
-        print("⚡ Musify Instant Stream Fallback for: ${song.title}");
-        streamUrl = song.streamUrl;
-      }
+      // 5. Asynchronously extract FULL-LENGTH YouTube stream URL (allow up to 10 seconds)
+      String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!).timeout(const Duration(seconds: 10));
 
       if (_playRequestId != currentRequestId) return;
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal memutar audio '${_currentSong!.title}'. Coba lagu lain.";
+        _errorMessage = "Gagal memutar lagu full '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
         return;
       }
 
-      // 6. Set URL and start playback
+      // 6. Set URL and start playing full track
       await _audioPlayer.setUrl(streamUrl);
 
       if (_playRequestId != currentRequestId) return;
@@ -176,22 +168,9 @@ class PlayerStateNotifier extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
-      print("Musify Playback error for ${_currentSong?.title}: $e");
-
-      if (song.streamUrl != null && song.streamUrl!.isNotEmpty) {
-        try {
-          await _audioPlayer.setUrl(song.streamUrl!);
-          await _audioPlayer.play();
-          _status = PlayerLoadingStatus.playing;
-          notifyListeners();
-          return;
-        } catch (fallbackErr) {
-          print("Fallback error: $fallbackErr");
-        }
-      }
-
+      print("Full Playback error for ${_currentSong?.title}: $e");
       _status = PlayerLoadingStatus.error;
-      _errorMessage = "Gagal memutar audio. Periksa koneksi internet Anda.";
+      _errorMessage = "Gagal memutar lagu full. Periksa koneksi internet Anda.";
       notifyListeners();
     }
   }

@@ -18,7 +18,7 @@ class MusicService {
       album: item['collectionName'] ?? 'Single',
       artworkUrl: highResArtwork,
       durationSeconds: (item['trackTimeMillis'] ?? 0) ~/ 1000,
-      streamUrl: item['previewUrl'], // Instant audio stream fallback!
+      streamUrl: null, // Zero 30-second previews! Forces pure full-length YouTube audio!
     );
   }
 
@@ -95,20 +95,6 @@ class MusicService {
 
           final String trackId = item['id']?['attributes']?['im:id'] ?? '${title}_$artist'.hashCode.toString();
 
-          String previewUrl = '';
-          final dynamic rawLink = item['link'];
-          if (rawLink is List) {
-            for (final l in rawLink) {
-              final String href = l['attributes']?['href'] ?? '';
-              if (href.contains('audio-ssl.itunes.apple.com') || href.contains('.m4a') || l['attributes']?['rel'] == 'enclosure') {
-                previewUrl = href;
-                break;
-              }
-            }
-          } else if (rawLink is Map) {
-            previewUrl = rawLink['attributes']?['href'] ?? '';
-          }
-
           return Song(
             id: 'itunes_rss_${country}_$trackId',
             title: title,
@@ -116,7 +102,7 @@ class MusicService {
             album: album,
             artworkUrl: highResArtwork,
             durationSeconds: 210,
-            streamUrl: previewUrl.isNotEmpty ? previewUrl : null,
+            streamUrl: null, // Pure full-length YouTube audio only!
           );
         }).toList();
       }
@@ -146,7 +132,7 @@ class MusicService {
             album: item['album']?['title'] ?? 'Single',
             artworkUrl: rawArtwork.isNotEmpty ? rawArtwork : 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
             durationSeconds: item['duration'] ?? 180,
-            streamUrl: item['preview'],
+            streamUrl: null, // Pure full-length YouTube audio only!
           );
         }).toList();
       }
@@ -186,7 +172,6 @@ class MusicService {
         uniqueSongs[s.id] = s;
       }
     } else {
-      // Default 'Trending' (Mix of Indo & Global Top Hits)
       final indoRss = await getItunesRssTrending(country: 'id', limit: 20);
       for (final s in indoRss) {
         uniqueSongs[s.id] = s;

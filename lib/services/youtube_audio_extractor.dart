@@ -37,7 +37,7 @@ class YoutubeAudioExtractor {
     // 2. Direct Video ID extraction if available
     if (directVideoId != null && directVideoId.isNotEmpty) {
       try {
-        final manifest = await _yt.videos.streamsClient.getManifest(directVideoId).timeout(const Duration(seconds: 4));
+        final manifest = await _yt.videos.streamsClient.getManifest(directVideoId).timeout(const Duration(seconds: 6));
         if (manifest.audioOnly.isNotEmpty) {
           final audioStreams = manifest.audioOnly.toList();
           final preferredStream = audioStreams.firstWhere(
@@ -62,13 +62,13 @@ class YoutubeAudioExtractor {
       final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       List<Video> videoList = [];
       try {
-        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 4));
+        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 5));
         videoList = searchResults.whereType<Video>().toList();
       } catch (_) {}
 
       if (videoList.isEmpty) {
         try {
-          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 4));
+          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 5));
           videoList.addAll(fallbackResults.whereType<Video>());
         } catch (_) {}
       }
@@ -100,7 +100,7 @@ class YoutubeAudioExtractor {
         for (final selectedVideo in candidates) {
           try {
             final videoId = selectedVideo.id.value;
-            final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 4));
+            final manifest = await _yt.videos.streamsClient.getManifest(videoId).timeout(const Duration(seconds: 5));
 
             String? selectedUrl;
             if (manifest.audioOnly.isNotEmpty) {
@@ -131,7 +131,7 @@ class YoutubeAudioExtractor {
       print('YouTube full stream search notice for ${song.title}: $e');
     }
 
-    // 4. Invidious Proxy Stream URL fallback
+    // 4. Invidious REST API fallback for Full-Length Audio Stream
     try {
       final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       final invidiousInstances = [
@@ -142,20 +142,28 @@ class YoutubeAudioExtractor {
 
       for (final instance in invidiousInstances) {
         try {
-          final searchRes = await http.get(Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent(searchQuery)}&type=video')).timeout(const Duration(seconds: 3));
+          final searchRes = await http.get(Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent(searchQuery)}&type=video')).timeout(const Duration(seconds: 4));
           if (searchRes.statusCode == 200) {
             final List results = json.decode(searchRes.body);
             final filtered = results.where((item) {
               final sec = item['lengthSeconds']?.toInt() ?? 0;
-              return sec > 0 && sec <= 600;
+              return sec >= 45 && sec <= 600;
             }).toList();
 
             if (filtered.isNotEmpty) {
               final videoId = filtered.first['videoId'];
-              final proxyUrl = '$instance/latest_version?id=$videoId&itag=140';
-              print('✅ Invidious Proxy Stream URL for: ${song.title} ($proxyUrl)');
-              _streamCache[song.id] = _CachedStream(proxyUrl, DateTime.now());
-              return proxyUrl;
+              final videoRes = await http.get(Uri.parse('$instance/api/v1/videos/$videoId')).timeout(const Duration(seconds: 4));
+              if (videoRes.statusCode == 200) {
+                final data = json.decode(videoRes.body);
+                final List adaptive = data['adaptiveFormats'] ?? [];
+                final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
+                if (audioStreams.isNotEmpty) {
+                  final fullUrl = audioStreams.first['url'].toString();
+                  print('✅ Invidious Full-Length Stream URL for: ${song.title}');
+                  _streamCache[song.id] = _CachedStream(fullUrl, DateTime.now());
+                  return fullUrl;
+                }
+              }
             }
           }
         } catch (_) {}

@@ -72,22 +72,37 @@ class PlayerStateNotifier extends ChangeNotifier {
     });
 
     _audioPlayer.playerStateStream.listen((state) {
-      if (state.processingState == ProcessingState.completed) {
+      final isPlaying = state.playing;
+      final processingState = state.processingState;
+
+      if (processingState == ProcessingState.completed) {
         // ONLY advance to next song if track played to end (within 5 seconds of duration)
         if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 5) {
           next();
         } else {
           _status = PlayerLoadingStatus.paused;
         }
-      } else if (state.playing && state.processingState == ProcessingState.ready) {
+      } else if (isPlaying) {
         _status = PlayerLoadingStatus.playing;
-      } else if (state.processingState == ProcessingState.ready && !state.playing) {
-        _status = PlayerLoadingStatus.paused;
-      } else if (state.processingState == ProcessingState.buffering) {
+      } else if (processingState == ProcessingState.buffering || processingState == ProcessingState.loading) {
         _status = PlayerLoadingStatus.loading;
+      } else if (processingState == ProcessingState.ready && !isPlaying) {
+        _status = PlayerLoadingStatus.paused;
+      } else if (processingState == ProcessingState.idle) {
+        _status = PlayerLoadingStatus.idle;
       }
       notifyListeners();
     });
+
+    _audioPlayer.playbackEventStream.listen(
+      (event) {},
+      onError: (Object e, StackTrace st) {
+        print("AudioPlayer playbackEvent error: $e");
+        _status = PlayerLoadingStatus.error;
+        _errorMessage = "Gagal memutar audio: $e";
+        notifyListeners();
+      },
+    );
   }
 
   void toggleShuffle() {
@@ -200,21 +215,24 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
-    if (_status == PlayerLoadingStatus.loading) {
-      return;
-    }
-
     try {
       if (_audioPlayer.playing) {
         await _audioPlayer.pause();
         _status = PlayerLoadingStatus.paused;
+      } else if (_status == PlayerLoadingStatus.loading) {
+        try {
+          await _audioPlayer.stop();
+        } catch (_) {}
+        _status = PlayerLoadingStatus.paused;
       } else {
-        if (_currentSong != null && _audioPlayer.audioSource == null) {
-          await playSong(_currentSong!, index: _currentIndex);
-          return;
+        if (_currentSong != null) {
+          if (_audioPlayer.audioSource == null) {
+            await playSong(_currentSong!, index: _currentIndex);
+            return;
+          }
+          await _audioPlayer.play();
+          _status = PlayerLoadingStatus.playing;
         }
-        await _audioPlayer.play();
-        _status = PlayerLoadingStatus.playing;
       }
     } catch (e) {
       print("Error in togglePlayPause: $e");

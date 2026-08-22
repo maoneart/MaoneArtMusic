@@ -55,6 +55,25 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       final isPlaying = state.playing;
       final processingState = state.processingState;
 
+      AudioProcessingState audioProcessingState = AudioProcessingState.idle;
+      switch (processingState) {
+        case ProcessingState.idle:
+          audioProcessingState = AudioProcessingState.idle;
+          break;
+        case ProcessingState.loading:
+          audioProcessingState = AudioProcessingState.loading;
+          break;
+        case ProcessingState.buffering:
+          audioProcessingState = AudioProcessingState.buffering;
+          break;
+        case ProcessingState.ready:
+          audioProcessingState = AudioProcessingState.ready;
+          break;
+        case ProcessingState.completed:
+          audioProcessingState = AudioProcessingState.completed;
+          break;
+      }
+
       playbackState.add(playbackState.value.copyWith(
         controls: [
           MediaControl.skipToPrevious,
@@ -69,13 +88,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           MediaAction.pause,
         },
         androidCompactActionIndices: const [0, 1, 2],
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[processingState]!,
+        processingState: audioProcessingState,
         playing: isPlaying,
       ));
     });

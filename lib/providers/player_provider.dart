@@ -207,6 +207,16 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> togglePlayPause() async {
+    if (_status == PlayerLoadingStatus.playing) {
+      await pause();
+    } else if (_status == PlayerLoadingStatus.paused) {
+      await resume();
+    } else if (_currentSong != null) {
+      await playSong(_currentSong!);
+    }
+  }
+
   Future<void> stop() async {
     await _audioPlayer.stop();
     _status = PlayerLoadingStatus.idle;

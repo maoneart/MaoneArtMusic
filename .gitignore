@@ -1,0 +1,39 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Android related
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+**/android/app/src/debug/libs
+**/android/app/src/profile/libs
+**/android/local.properties
+**/android/app/build
+**/android/.gradle
+**/android/captures/
+**/android/gradle/wrapper/gradle-wrapper.jar
+
+# Symbol specification files
+symbols.zip
+
+# Obfuscation mapping files
+mapping.txt

@@ -1,0 +1,41 @@
+name: maoneart_music
+description: "MaoneArt Music - Open source Spotify & YouTube Music Client built with Flutter"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+
+  # Audio Playback & Service
+  just_audio: ^0.9.38
+  audio_service: ^0.18.15
+
+  # YouTube Audio Extraction & Networking
+  youtube_explode_dart: ^2.2.1
+  http: ^1.2.1
+  dio: ^5.4.3+1
+
+  # Data Storage & Preferences
+  shared_preferences: ^2.2.3
+
+  # UI Components & Glassmorphism
+  cached_network_image: ^3.3.1
+  flutter_blurhash: ^0.8.2
+  google_fonts: ^6.2.1
+  flutter_spinkit: ^5.2.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true

@@ -82,10 +82,14 @@ class PlayerStateNotifier extends ChangeNotifier {
         } else {
           _status = PlayerLoadingStatus.paused;
         }
-      } else if (isPlaying && (processingState == ProcessingState.ready || processingState == ProcessingState.buffering)) {
+      } else if (isPlaying) {
         _status = PlayerLoadingStatus.playing;
-      } else if (!isPlaying && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading)) {
-        _status = PlayerLoadingStatus.loading;
+      } else if (processingState == ProcessingState.buffering || processingState == ProcessingState.loading) {
+        if (_position.inSeconds > 0) {
+          _status = PlayerLoadingStatus.playing;
+        } else {
+          _status = PlayerLoadingStatus.loading;
+        }
       } else if (processingState == ProcessingState.ready && !isPlaying) {
         _status = PlayerLoadingStatus.paused;
       } else if (processingState == ProcessingState.idle) {
@@ -121,32 +125,22 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Play a song or queue of songs with instant UI feedback & concurrency guards
-  Future<void> playSong(Song song, {List<Song>? newQueue, int index = 0}) async {
-    _setupAudioHandlerCallbacks();
+  Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
+    final int currentRequestId = ++_playRequestId;
+    final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 1. Increment Play Request ID to invalidate old pending extractions
-    _playRequestId++;
-    final int currentRequestId = _playRequestId;
-
-    // 2. Stop current audio immediately so old track stops playing
-    try {
-      await _audioPlayer.stop();
-    } catch (_) {}
-
-    // 3. Update Queue and Current Index
-    if (newQueue != null && newQueue.isNotEmpty) {
-      _queue = List.from(newQueue);
-      _currentIndex = index.clamp(0, _queue.length - 1);
+    // 1. Queue Management
+    if (targetQueue != null && targetQueue.isNotEmpty) {
+      _queue = List.from(targetQueue);
+      _currentIndex = index ?? _queue.indexWhere((s) => s.id == song.id);
+      if (_currentIndex == -1) _currentIndex = 0;
       _currentSong = _queue[_currentIndex];
     } else {
-      if (!_queue.any((s) => s.id == song.id)) {
-        _queue.add(song);
-        _currentIndex = _queue.length - 1;
+      if (_queue.isEmpty || !_queue.any((s) => s.id == song.id)) {
+        _queue = [song];
+        _currentIndex = 0;
       } else {
-        _currentIndex = index >= 0 && index < _queue.length
-            ? index
-            : _queue.indexWhere((s) => s.id == song.id);
+        _currentIndex = _queue.indexWhere((s) => s.id == song.id);
       }
       _currentSong = _queue[_currentIndex];
     }
@@ -170,7 +164,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       );
     }
 
-    // 5. Trigger background pre-fetching for adjacent tracks (0ms delay for Next / Previous)
+    // 5. Trigger background pre-fetching for adjacent tracks
     if (_queue.length > 1) {
       final int nextIndex = (_currentIndex + 1) % _queue.length;
       final int prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
@@ -182,11 +176,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 6. Asynchronously extract stream URL
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!);
 
-      // Check if user clicked Next/Prev or another track during network fetch
-      if (_playRequestId != currentRequestId) {
-        print("Discarding stale play request ($currentRequestId vs $_playRequestId)");
-        return;
-      }
+      if (_playRequestId != currentRequestId) return;
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
@@ -195,15 +185,19 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Set AudioSource and start playing immediately
+      // 7. Set AudioSource with 5s timeout guard to prevent infinite spinner lock
       final audioSource = AudioSource.uri(
         Uri.parse(streamUrl),
         headers: const {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
         },
       );
 
-      await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
+      try {
+        await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero).timeout(const Duration(seconds: 5));
+      } catch (timeoutErr) {
+        print("setAudioSource timeout guard triggered: $timeoutErr");
+      }
 
       if (_playRequestId != currentRequestId) return;
 

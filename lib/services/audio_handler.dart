@@ -97,7 +97,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
-  void updateMediaItem({
+  void setMediaItem({
     required String id,
     required String title,
     required String artist,

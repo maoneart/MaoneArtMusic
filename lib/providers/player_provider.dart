@@ -87,7 +87,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
 
     // Update Android MediaSession / Samsung One UI notification metadata immediately
-    (globalAudioHandler as MyAudioHandler).updateMediaItem(
+    (globalAudioHandler as MyAudioHandler).setMediaItem(
       id: song.id,
       title: song.title,
       artist: song.artist,

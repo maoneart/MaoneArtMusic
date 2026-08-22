@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'services/audio_handler.dart';
 import 'theme/maoneart_theme.dart';
 import 'views/home_screen.dart';
 import 'views/search_screen.dart';
@@ -9,7 +10,7 @@ import 'views/settings_screen.dart';
 import 'widgets/glass_container.dart';
 import 'widgets/mini_player.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -17,6 +18,10 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
+  
+  // Initialize AudioService for Samsung One UI & Android MediaSession controls
+  await initAudioService();
+
   runApp(const ProviderScope(child: MaoneArtMusicApp()));
 }
 

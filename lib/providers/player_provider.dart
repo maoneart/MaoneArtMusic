@@ -3,11 +3,12 @@ import 'package:just_audio/just_audio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
 import '../services/youtube_audio_extractor.dart';
+import '../services/audio_handler.dart';
 
 enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  AudioPlayer get _audioPlayer => (globalAudioHandler as MyAudioHandler).player;
 
   Song? _currentSong;
   List<Song> _queue = [];
@@ -30,6 +31,13 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   PlayerStateNotifier() {
     _initListeners();
+    _setupAudioHandlerCallbacks();
+  }
+
+  void _setupAudioHandlerCallbacks() {
+    final handler = globalAudioHandler as MyAudioHandler;
+    handler.onSkipToNextCallback = () => next();
+    handler.onSkipToPreviousCallback = () => previous();
   }
 
   void _initListeners() {
@@ -76,6 +84,16 @@ class PlayerStateNotifier extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+    // Update Android MediaSession / Samsung One UI notification metadata
+    (globalAudioHandler as MyAudioHandler).updateMediaItem(
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      artUri: song.artworkUrl,
+      duration: Duration(seconds: song.durationSeconds),
+    );
+
     try {
       // 1. Stop current audio player
       await _audioPlayer.stop();
@@ -90,7 +108,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 3. Set standard AudioSource.uri for full-length 200 OK playback (NO 30s preview fallbacks)
+      // 3. Set standard AudioSource.uri for full-length 200 OK playback
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
 
       await _audioPlayer.setAudioSource(audioSource);

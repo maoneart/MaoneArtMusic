@@ -96,15 +96,15 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 3. Set unthrottled audio stream source for ExoPlayer
-      final audioSource = AudioSource.uri(Uri.parse(streamUrl));
+      // 3. Set LockCachingAudioSource for instant 0.0s local cache re-play & data saving
+      final audioSource = LockCachingAudioSource(Uri.parse(streamUrl));
 
       await _audioPlayer.setAudioSource(audioSource);
       await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {
       print("Full YouTube Playback error for ${song.title}: $e");
-      // Secondary fail-safe fallback
+      // Secondary fail-safe fallback using standard AudioSource.uri
       if (song.previewUrl != null && song.previewUrl!.isNotEmpty) {
         try {
           final fallbackSource = AudioSource.uri(Uri.parse(song.previewUrl!));

@@ -1,20 +1,25 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
-late AudioHandler globalAudioHandler;
+AudioHandler? globalAudioHandler;
 
-Future<AudioHandler> initAudioService() async {
-  globalAudioHandler = await AudioService.init(
-    builder: () => MyAudioHandler(),
-    config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.maoneart.music.channel.audio',
-      androidNotificationChannelName: 'MaoneArt Music Playback',
-      androidNotificationOngoing: true,
-      androidStopForegroundOnPause: true,
-      androidNotificationIcon: 'mipmap/ic_launcher',
-    ),
-  );
-  return globalAudioHandler;
+Future<AudioHandler?> initAudioService() async {
+  try {
+    globalAudioHandler = await AudioService.init(
+      builder: () => MyAudioHandler(),
+      config: const AudioServiceConfig(
+        androidNotificationChannelId: 'com.maoneart.music.channel.audio',
+        androidNotificationChannelName: 'MaoneArt Music Playback',
+        androidNotificationOngoing: true,
+        androidStopForegroundOnPause: true,
+        androidNotificationIcon: 'mipmap/ic_launcher',
+      ),
+    );
+    return globalAudioHandler;
+  } catch (e) {
+    print('AudioService initialization error: $e');
+    return null;
+  }
 }
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {

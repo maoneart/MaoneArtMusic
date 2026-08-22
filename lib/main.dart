@@ -10,7 +10,7 @@ import 'views/settings_screen.dart';
 import 'widgets/glass_container.dart';
 import 'widgets/mini_player.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -18,11 +18,11 @@ void main() async {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  
-  // Initialize AudioService for Samsung One UI & Android MediaSession controls
-  await initAudioService();
 
   runApp(const ProviderScope(child: MaoneArtMusicApp()));
+
+  // Initialize AudioService in background after UI startup to prevent blank black screen
+  initAudioService();
 }
 
 class MaoneArtMusicApp extends StatelessWidget {

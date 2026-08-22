@@ -8,7 +8,14 @@ import '../services/audio_handler.dart';
 enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  AudioPlayer get _audioPlayer => (globalAudioHandler as MyAudioHandler).player;
+  final AudioPlayer _fallbackPlayer = AudioPlayer();
+
+  AudioPlayer get _audioPlayer {
+    if (globalAudioHandler is MyAudioHandler) {
+      return (globalAudioHandler as MyAudioHandler).player;
+    }
+    return _fallbackPlayer;
+  }
 
   Song? _currentSong;
   List<Song> _queue = [];
@@ -35,9 +42,11 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   void _setupAudioHandlerCallbacks() {
-    final handler = globalAudioHandler as MyAudioHandler;
-    handler.onSkipToNextCallback = () => next();
-    handler.onSkipToPreviousCallback = () => previous();
+    if (globalAudioHandler is MyAudioHandler) {
+      final handler = globalAudioHandler as MyAudioHandler;
+      handler.onSkipToNextCallback = () => next();
+      handler.onSkipToPreviousCallback = () => previous();
+    }
   }
 
   void _initListeners() {
@@ -69,6 +78,8 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   /// Play a song or queue of songs
   Future<void> playSong(Song song, {List<Song>? newQueue, int index = 0}) async {
+    _setupAudioHandlerCallbacks();
+
     if (newQueue != null && newQueue.isNotEmpty) {
       _queue = List.from(newQueue);
       _currentIndex = index;
@@ -86,15 +97,17 @@ class PlayerStateNotifier extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    // Update Android MediaSession / Samsung One UI notification metadata immediately
-    (globalAudioHandler as MyAudioHandler).setMediaItem(
-      id: song.id,
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      artUri: song.artworkUrl,
-      duration: Duration(seconds: song.durationSeconds),
-    );
+    // Safely update Android MediaSession / Samsung One UI notification metadata
+    if (globalAudioHandler is MyAudioHandler) {
+      (globalAudioHandler as MyAudioHandler).setMediaItem(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        artUri: song.artworkUrl,
+        duration: Duration(seconds: song.durationSeconds),
+      );
+    }
 
     try {
       // 1. Fully stop audio player and clear previous audio buffer pipeline
@@ -152,6 +165,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _fallbackPlayer.dispose();
     super.dispose();
   }
 }

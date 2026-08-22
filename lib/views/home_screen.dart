@@ -144,6 +144,21 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
 
+                // Category Chips Row
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                  child: Row(
+                    children: [
+                      _buildCategoryChip(ref, musicState, 'Trending', '🔥 Trending'),
+                      _buildCategoryChip(ref, musicState, 'Indonesia', '🇮🇩 Hits Indo'),
+                      _buildCategoryChip(ref, musicState, 'Global', '🌐 Hits Global'),
+                      _buildCategoryChip(ref, musicState, 'Viral TikTok', '🎵 TikTok Hits'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
                 // Songs List
                 if (musicState.trendingSongs.isEmpty && musicState.isLoadingTrending)
                   const Padding(
@@ -179,6 +194,34 @@ class HomeScreen extends ConsumerWidget {
                   ),
               ],
             ),
+          ),
+        ),
+  Widget _buildCategoryChip(WidgetRef ref, dynamic musicState, String categoryKey, String label) {
+    final isSelected = musicState.selectedCategory == categoryKey;
+
+    return GestureDetector(
+      onTap: () {
+        if (!isSelected) {
+          ref.read(musicProvider).fetchTrending(category: categoryKey);
+        }
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? MaoneArtTheme.primaryCyan.withOpacity(0.3) : Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? MaoneArtTheme.primaryCyan : Colors.white.withOpacity(0.12),
+            width: 1.2,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? MaoneArtTheme.primaryCyan : Colors.white.withOpacity(0.8),
           ),
         ),
       ),

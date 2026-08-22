@@ -29,13 +29,16 @@ flutter config --android-sdk /usr/lib/android-sdk
 echo '--> Mem-build APK Release ARM64...'
 flutter build apk --release --target-platform android-arm64 --android-skip-build-dependency-validation
 
-echo '--> Menyalin APK hasil ke SDCard...'
+echo '--> Menyalin APK hasil ke SDCard dan folder Download...'
 mkdir -p /sdcard/www/MaoneArtMusic/build/app/outputs/flutter-apk/
 cp -r build/app/outputs/flutter-apk/* /sdcard/www/MaoneArtMusic/build/app/outputs/flutter-apk/ 2>/dev/null || true
+cp build/app/outputs/flutter-apk/app-release.apk /sdcard/Download/MaoneArtMusic-release.apk 2>/dev/null || true
+cp build/app/outputs/flutter-apk/app-release.apk /sdcard/Download/MaoneArtMusic.apk 2>/dev/null || true
 
 echo '================================================='
 echo '  ✅ BUILD SELESAI!'
 echo '  File APK tersimpan di:'
-echo '  /sdcard/www/MaoneArtMusic/build/app/outputs/flutter-apk/app-release.apk'
+echo '  - /sdcard/Download/MaoneArtMusic-release.apk'
+echo '  - /sdcard/www/MaoneArtMusic/build/app/outputs/flutter-apk/app-release.apk'
 echo '================================================='
 "

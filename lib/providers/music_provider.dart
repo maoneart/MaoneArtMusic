@@ -11,23 +11,28 @@ class MusicStateNotifier extends ChangeNotifier {
   bool _isLoadingTrending = false;
   bool _isSearching = false;
   String _currentQuery = '';
+  String _selectedCategory = 'Trending';
 
   List<Song> get trendingSongs => _trendingSongs;
   List<Song> get searchResults => _searchResults;
   bool get isLoadingTrending => _isLoadingTrending;
   bool get isSearching => _isSearching;
   String get currentQuery => _currentQuery;
+  String get selectedCategory => _selectedCategory;
 
   MusicStateNotifier() {
     fetchTrending();
   }
 
-  Future<void> fetchTrending() async {
+  Future<void> fetchTrending({String? category}) async {
+    if (category != null) {
+      _selectedCategory = category;
+    }
     _isLoadingTrending = true;
     notifyListeners();
 
     try {
-      _trendingSongs = await _musicService.getTrendingSongs();
+      _trendingSongs = await _musicService.getTrendingSongs(category: _selectedCategory);
     } catch (e) {
       print('Error fetching trending: $e');
     }

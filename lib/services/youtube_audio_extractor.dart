@@ -19,18 +19,24 @@ class YoutubeAudioExtractor {
     getAudioStreamUrl(song).then((_) {}).catchError((_) {});
   }
 
-  /// Extract highest quality unthrottled audio stream URL for a song from YouTube with candidate retries and CDN fallback
+  /// Extract highest quality unthrottled audio stream URL for a song with instant CDN priority and YouTube fallback
   static Future<String?> getAudioStreamUrl(Song song) async {
-    // 1. Return cached URL if valid (max 45 mins)
+    // 1. Return cached YouTube URL if valid (max 45 mins)
     if (_streamCache.containsKey(song.id)) {
       final cached = _streamCache[song.id]!;
       if (!cached.isExpired) {
-        print('⚡ Stream URL loaded from memory cache for: ${song.title}');
+        print('⚡ YouTube stream loaded from cache for: ${song.title}');
         return cached.url;
       }
     }
 
-    // 2. Try YouTube extraction with quick 3s timeout per candidate
+    // 2. Direct high-speed CDN stream (iTunes/Deezer/Apple audio CDN) -> INSTANT 0ms PLAYBACK!
+    if (song.streamUrl != null && song.streamUrl!.isNotEmpty) {
+      print('⚡ Using instant high-speed audio CDN for: ${song.title}');
+      return song.streamUrl;
+    }
+
+    // 3. Fallback to YouTube Explode extraction for custom tracks with 3s timeout
     try {
       final String searchQuery = '${song.title} ${song.artist}'.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       List<Video> videoList = [];
@@ -48,14 +54,6 @@ class YoutubeAudioExtractor {
 
       if (videoList.isNotEmpty) {
         final candidates = List<Video>.from(videoList.take(3));
-        candidates.sort((a, b) {
-          final aTopic = a.author.toLowerCase().contains('- topic') || a.title.toLowerCase().contains('audio') || a.title.toLowerCase().contains('official');
-          final bTopic = b.author.toLowerCase().contains('- topic') || b.title.toLowerCase().contains('audio') || b.title.toLowerCase().contains('official');
-          if (aTopic && !bTopic) return -1;
-          if (!aTopic && bTopic) return 1;
-          return 0;
-        });
-
         for (final selectedVideo in candidates) {
           try {
             final videoId = selectedVideo.id.value;
@@ -84,12 +82,6 @@ class YoutubeAudioExtractor {
       }
     } catch (e) {
       print('YouTube extraction notice for ${song.title}: $e');
-    }
-
-    // 3. Instant Fallback CDN: Return high-quality direct audio stream if YouTube is rate-limited or fails
-    if (song.streamUrl != null && song.streamUrl!.isNotEmpty) {
-      print('⚡ Using instant high-quality audio stream CDN for: ${song.title}');
-      return song.streamUrl;
     }
 
     return null;

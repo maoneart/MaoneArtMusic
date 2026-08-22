@@ -163,6 +163,20 @@ class MusicService {
 
           final String trackId = item['id']?['attributes']?['im:id'] ?? '${title}_$artist'.hashCode.toString();
 
+          String previewUrl = '';
+          final dynamic rawLink = item['link'];
+          if (rawLink is List) {
+            for (final l in rawLink) {
+              final String href = l['attributes']?['href'] ?? '';
+              if (href.contains('audio-ssl.itunes.apple.com') || href.contains('.m4a') || l['attributes']?['rel'] == 'enclosure') {
+                previewUrl = href;
+                break;
+              }
+            }
+          } else if (rawLink is Map) {
+            previewUrl = rawLink['attributes']?['href'] ?? '';
+          }
+
           return Song(
             id: 'itunes_rss_${country}_$trackId',
             title: title,
@@ -170,6 +184,7 @@ class MusicService {
             album: album,
             artworkUrl: highResArtwork,
             durationSeconds: 210,
+            streamUrl: previewUrl.isNotEmpty ? previewUrl : null,
           );
         }).toList();
       }

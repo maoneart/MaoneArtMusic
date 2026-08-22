@@ -82,9 +82,9 @@ class PlayerStateNotifier extends ChangeNotifier {
         } else {
           _status = PlayerLoadingStatus.paused;
         }
-      } else if (isPlaying) {
+      } else if (isPlaying && (processingState == ProcessingState.ready || processingState == ProcessingState.buffering)) {
         _status = PlayerLoadingStatus.playing;
-      } else if (processingState == ProcessingState.buffering || processingState == ProcessingState.loading) {
+      } else if (!isPlaying && (processingState == ProcessingState.buffering || processingState == ProcessingState.loading)) {
         _status = PlayerLoadingStatus.loading;
       } else if (processingState == ProcessingState.ready && !isPlaying) {
         _status = PlayerLoadingStatus.paused;
@@ -203,18 +203,32 @@ class PlayerStateNotifier extends ChangeNotifier {
         },
       );
 
-      // Start ExoPlayer playback intent immediately
-      _audioPlayer.play();
-      _status = PlayerLoadingStatus.playing;
-      notifyListeners();
-
       await _audioPlayer.setAudioSource(audioSource, initialPosition: Duration.zero);
 
       if (_playRequestId != currentRequestId) return;
 
+      await _audioPlayer.play();
+      _status = PlayerLoadingStatus.playing;
+      notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
       print("Full Playback error for ${_currentSong?.title}: $e");
+
+      // Retry with direct Audio CDN fallback if YouTube streamUrl failed
+      if (song.streamUrl != null && song.streamUrl!.isNotEmpty) {
+        try {
+          print("⚡ Retrying playback with direct Audio CDN fallback...");
+          final fallbackSource = AudioSource.uri(Uri.parse(song.streamUrl!));
+          await _audioPlayer.setAudioSource(fallbackSource, initialPosition: Duration.zero);
+          await _audioPlayer.play();
+          _status = PlayerLoadingStatus.playing;
+          notifyListeners();
+          return;
+        } catch (fallbackErr) {
+          print("Fallback playback error: $fallbackErr");
+        }
+      }
+
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${_currentSong?.title}': $e";
       notifyListeners();

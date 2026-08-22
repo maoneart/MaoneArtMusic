@@ -80,8 +80,14 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 1. Stop current audio player
       await _audioPlayer.stop();
 
-      // 2. Fast Resolve FULL-LENGTH Audio Stream
+      // 2. Resolve FULL-LENGTH Audio Stream (unthrottled 200 OK) for the selected song
       String? streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(song);
+
+      // Fail-safe fallback if YouTube search is delayed on slow network
+      if ((streamUrl == null || streamUrl.isEmpty) && song.previewUrl != null && song.previewUrl!.isNotEmpty) {
+        print("YouTube search timeout, using previewUrl fallback: ${song.previewUrl}");
+        streamUrl = song.previewUrl;
+      }
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
@@ -90,13 +96,25 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 3. Fast AudioSource initialization and instant playback
+      // 3. Set unthrottled audio stream source for ExoPlayer
       final audioSource = AudioSource.uri(Uri.parse(streamUrl));
-      await _audioPlayer.setAudioSource(audioSource, preload: true);
-      _audioPlayer.play();
+
+      await _audioPlayer.setAudioSource(audioSource);
+      await _audioPlayer.play();
       _status = PlayerLoadingStatus.playing;
     } catch (e) {
-      print("Playback error for ${song.title}: $e");
+      print("Full YouTube Playback error for ${song.title}: $e");
+      // Secondary fail-safe fallback
+      if (song.previewUrl != null && song.previewUrl!.isNotEmpty) {
+        try {
+          final fallbackSource = AudioSource.uri(Uri.parse(song.previewUrl!));
+          await _audioPlayer.setAudioSource(fallbackSource);
+          await _audioPlayer.play();
+          _status = PlayerLoadingStatus.playing;
+          notifyListeners();
+          return;
+        } catch (_) {}
+      }
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar '${song.title}': $e";
     }

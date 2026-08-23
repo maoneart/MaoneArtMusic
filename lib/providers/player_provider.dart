@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
 import '../services/youtube_audio_extractor.dart';
 import '../services/audio_handler.dart';
@@ -9,7 +10,7 @@ import '../services/storage_service.dart';
 import '../services/music_service.dart';
 
 enum PlayerLoadingStatus { idle, loading, playing, paused, error }
-enum RepeatMode { off, all, one }
+enum MusicRepeatMode { off, all, one }
 
 class PlayerStateNotifier extends ChangeNotifier {
   final AudioPlayer _localPlayer = AudioPlayer();
@@ -25,7 +26,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   bool _isShuffle = false;
-  RepeatMode _repeatMode = RepeatMode.off;
+  MusicRepeatMode _repeatMode = MusicRepeatMode.off;
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
   String? _errorMessage;
   String? _currentLyrics;
@@ -40,7 +41,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   Duration get position => _position;
   Duration get duration => _duration;
   bool get isShuffle => _isShuffle;
-  RepeatMode get repeatMode => _repeatMode;
+  MusicRepeatMode get repeatMode => _repeatMode;
   String get audioQuality => _audioQuality;
   String? get errorMessage => _errorMessage;
   String? get currentLyrics => _currentLyrics;
@@ -118,18 +119,18 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   void toggleRepeatMode() {
-    if (_repeatMode == RepeatMode.off) {
-      _repeatMode = RepeatMode.all;
-    } else if (_repeatMode == RepeatMode.all) {
-      _repeatMode = RepeatMode.one;
+    if (_repeatMode == MusicRepeatMode.off) {
+      _repeatMode = MusicRepeatMode.all;
+    } else if (_repeatMode == MusicRepeatMode.all) {
+      _repeatMode = MusicRepeatMode.one;
     } else {
-      _repeatMode = RepeatMode.off;
+      _repeatMode = MusicRepeatMode.off;
     }
     notifyListeners();
   }
 
   void _handleTrackCompletion() {
-    if (_repeatMode == RepeatMode.one && _currentSong != null) {
+    if (_repeatMode == MusicRepeatMode.one && _currentSong != null) {
       seek(Duration.zero);
       resume();
     } else {

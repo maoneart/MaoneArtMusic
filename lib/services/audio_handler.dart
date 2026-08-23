@@ -13,8 +13,8 @@ Future<MyAudioHandler?> initAudioService() async {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.maoneart.music.channel.audio',
         androidNotificationChannelName: 'MaoneArt Music Playback',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: false,
+        androidNotificationOngoing: false,
+        androidStopForegroundOnPause: true,
         androidNotificationIcon: 'mipmap/ic_launcher',
         androidShowNotificationBadge: true,
         notificationColor: Color(0xFF00F0FF),

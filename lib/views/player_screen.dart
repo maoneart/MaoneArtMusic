@@ -236,10 +236,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                       IconButton(
                         icon: Icon(
-                          playerState.repeatMode == RepeatMode.one
+                          playerState.repeatMode == MusicRepeatMode.one
                               ? Icons.repeat_one
                               : Icons.repeat,
-                          color: playerState.repeatMode != RepeatMode.off
+                          color: playerState.repeatMode != MusicRepeatMode.off
                               ? MaoneArtTheme.primaryCyan
                               : Colors.white70,
                         ),

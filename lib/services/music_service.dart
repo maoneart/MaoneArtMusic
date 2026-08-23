@@ -49,10 +49,12 @@ class MusicService {
     final rawTitle = sep != -1 ? video.title.substring(sep + 3).trim() : video.title;
     final title = formatSongTitle(rawTitle);
 
-    final artwork = playlistImage ??
-        video.thumbnails.maxResUrl.isNotEmpty
-            ? video.thumbnails.maxResUrl
-            : video.thumbnails.highResUrl;
+    final String fallbackArt = video.thumbnails.maxResUrl.isNotEmpty
+        ? video.thumbnails.maxResUrl
+        : video.thumbnails.highResUrl;
+    final artwork = (playlistImage != null && playlistImage.isNotEmpty)
+        ? playlistImage
+        : fallbackArt;
 
     return Song(
       id: 'yt_${video.id.value}',
@@ -85,7 +87,7 @@ class MusicService {
     // Direct YouTube Playlist URL support
     final playlistId = PlaylistId.parsePlaylistId(cleanQuery);
     if (playlistId != null) {
-      return await getSongsFromPlaylist(playlistId.value, limit: limit);
+      return await getSongsFromPlaylist(playlistId, limit: limit);
     }
 
     final List<Song> songList = [];

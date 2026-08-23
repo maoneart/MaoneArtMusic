@@ -14,11 +14,11 @@ dependencies:
   flutter_riverpod: ^2.5.1
 
   # Audio Playback & Service
-  just_audio: ^0.9.38
-  audio_service: ^0.18.15
+  just_audio: ^0.10.6
+  audio_service: ^0.18.19
 
   # YouTube Audio Extraction & Networking
-  youtube_explode_dart: ^2.5.3
+  youtube_explode_dart: ^3.1.0
   http: ^1.2.1
   dio: ^5.4.3+1
 

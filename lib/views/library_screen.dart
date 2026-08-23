@@ -212,7 +212,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 90, top: 12),
+                          padding: const EdgeInsets.only(bottom: 160, top: 12),
                           itemCount: libraryState.favorites.length,
                           itemBuilder: (context, index) {
                             final song = libraryState.favorites[index];
@@ -262,7 +262,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                           ),
                         )
                       : ListView.builder(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 160),
                           itemCount: libraryState.playlists.length,
                           itemBuilder: (context, index) {
                             final playlist = libraryState.playlists[index];

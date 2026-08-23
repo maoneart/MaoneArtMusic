@@ -127,13 +127,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       },
       borderRadius: BorderRadius.circular(16),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isSelected ? activeIcon : inactiveIcon,
-              color: isSelected ? MaoneArtTheme.primaryCyan : Colors.white60,
+              color: isSelected ? MaoneArtTheme.spotifyGreenBright : Colors.white60,
               size: 24,
             ),
             const SizedBox(height: 2),
@@ -142,7 +142,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               style: TextStyle(
                 fontSize: 10,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? MaoneArtTheme.primaryCyan : Colors.white60,
+                color: isSelected ? MaoneArtTheme.spotifyGreenBright : Colors.white60,
               ),
             ),
           ],

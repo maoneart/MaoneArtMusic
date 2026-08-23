@@ -150,7 +150,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         )
                       : ListView.builder(
                           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                          padding: const EdgeInsets.only(bottom: 90, top: 8),
+                          padding: const EdgeInsets.only(bottom: 160, top: 8),
                           itemCount: musicState.searchResults.length,
                           itemBuilder: (context, index) {
                             final song = musicState.searchResults[index];

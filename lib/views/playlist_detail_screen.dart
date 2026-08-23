@@ -137,7 +137,7 @@ class PlaylistDetailScreen extends ConsumerWidget {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 90),
+                      padding: const EdgeInsets.only(bottom: 160),
                       itemCount: currentPlaylist.songs.length,
                       itemBuilder: (context, index) {
                         final song = currentPlaylist.songs[index];

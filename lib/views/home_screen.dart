@@ -380,6 +380,7 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                   ),
+                const SizedBox(height: 140),
               ],
             ),
           ),

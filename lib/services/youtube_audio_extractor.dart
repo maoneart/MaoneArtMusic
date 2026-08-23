@@ -43,6 +43,13 @@ class YoutubeAudioExtractor {
     getAudioStreamCandidateUrls(song, quality: quality).then((_) {}).catchError((_) {});
   }
 
+  /// Batch pre-fetch streams for a list of songs in background for instant 0ms playback
+  static void preFetchBatch(List<Song> songs, {String quality = 'high', int limit = 8}) {
+    for (final song in songs.take(limit)) {
+      preFetchStreamUrl(song, quality: quality);
+    }
+  }
+
   /// Returns candidate audio stream URLs in priority order for robust failover
   static Future<List<String>> getAudioStreamCandidateUrls(Song song, {String quality = 'high'}) async {
     final cacheKey = '${song.id}_$quality';

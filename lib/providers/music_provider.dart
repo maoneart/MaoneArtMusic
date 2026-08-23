@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
 import '../services/music_service.dart';
+import '../services/youtube_audio_extractor.dart';
 
 class MusicStateNotifier extends ChangeNotifier {
   final MusicService _musicService = MusicService();
@@ -33,6 +34,8 @@ class MusicStateNotifier extends ChangeNotifier {
 
     try {
       _trendingSongs = await _musicService.getTrendingSongs(category: _selectedCategory);
+      // Pre-fetch streams for top 8 trending songs so tapping them plays instantly (0ms)
+      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 8);
     } catch (e) {
       print('Error fetching trending: $e');
     }
@@ -55,6 +58,8 @@ class MusicStateNotifier extends ChangeNotifier {
 
     try {
       _searchResults = await _musicService.searchSongs(query);
+      // Pre-fetch top 6 search result streams
+      YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 6);
     } catch (e) {
       print('Error searching: $e');
     }

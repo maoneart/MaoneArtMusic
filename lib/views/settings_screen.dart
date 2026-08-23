@@ -123,38 +123,82 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
               const SizedBox(height: 24),
 
-              // About Section Card
+              // About Developer & App Card
+              const Text(
+                "Tentang Aplikasi",
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
               GlassContainer(
                 borderRadius: 20,
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   children: [
-                    const CircleAvatar(
-                      radius: 30,
-                      backgroundColor: MaoneArtTheme.primaryCyan,
-                      child: Icon(Icons.music_note, size: 36, color: Colors.black),
+                    // PP Bulat Developer
+                    Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [
+                            MaoneArtTheme.spotifyGreenBright,
+                            MaoneArtTheme.primaryCyan,
+                            MaoneArtTheme.primaryPurple,
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.3),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const CircleAvatar(
+                        radius: 44,
+                        backgroundColor: Color(0xFF141927),
+                        backgroundImage: AssetImage('assets/images/pp.jpg'),
+                      ),
                     ),
                     const SizedBox(height: 12),
                     const Text(
-                      "MaoneArt Music v1.0.0",
+                      "Hermawan",
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
+                        letterSpacing: 0.5,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Klien Musik Open Source berbasis Flutter & Musify YouTube Audio Engine.",
-                      textAlign: TextAlign.center,
+                    const SizedBox(height: 2),
+                    const Text(
+                      "Developer & Creator",
                       style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: MaoneArtTheme.spotifyGreenBright,
                       ),
                     ),
                     const SizedBox(height: 16),
+                    const Divider(color: Colors.white12, height: 1),
+                    const SizedBox(height: 16),
+
+                    // App Info Rows
+                    _buildInfoRow(Icons.apps_rounded, "Nama Aplikasi", "MaoneArt Music"),
+                    const SizedBox(height: 10),
+                    _buildInfoRow(Icons.verified_rounded, "Versi Aplikasi", "v1.0.0 (Release 2026)"),
+                    const SizedBox(height: 10),
+                    _buildInfoRow(Icons.code_rounded, "Bahasa Program", "Flutter & Dart (Google)"),
+                    const SizedBox(height: 10),
+                    _buildInfoRow(Icons.headphones_rounded, "Audio Engine", "ExoPlayer & YouTube Music"),
+
+                    const SizedBox(height: 16),
                     Text(
-                      "© 2026 MaoneArt. All rights reserved.",
+                      "© 2026 Hermawan • MaoneArt. All rights reserved.",
                       style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.4)),
                     ),
                   ],
@@ -165,6 +209,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: MaoneArtTheme.primaryCyan),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6)),
+        ),
+        const Spacer(),
+        Text(
+          value,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
+        ),
+      ],
     );
   }
 }

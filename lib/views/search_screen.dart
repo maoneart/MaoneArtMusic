@@ -33,11 +33,12 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
   }
 
   void _triggerSearch(String query) {
-    _searchController.text = query;
+    final clean = query.replaceAll('*', '').trim();
+    _searchController.text = clean;
     _searchController.selection = TextSelection.fromPosition(
-      TextPosition(offset: query.length),
+      TextPosition(offset: clean.length),
     );
-    ref.read(musicProvider).search(query);
+    ref.read(musicProvider).search(clean);
   }
 
   @override
@@ -91,7 +92,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                               : null,
                         ),
                         onChanged: (val) {
-                          ref.read(musicProvider).onSearchQueryChanged(val);
+                          final clean = val.replaceAll('*', '');
+                          ref.read(musicProvider).onSearchQueryChanged(clean);
                         },
                         onSubmitted: (val) {
                           FocusScope.of(context).unfocus();

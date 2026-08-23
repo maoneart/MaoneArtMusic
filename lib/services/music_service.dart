@@ -290,23 +290,29 @@ class MusicService {
   }
 
   /// Search songs using InnerTube YouTube search engine with Direct HTML and Explode fallbacks
-  Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
-    final cleanQuery = query.trim();
+  Future<List<Song>> searchSongs(String query, {int limit = 40}) async {
+    final cleanQuery = query.replaceAll('*', '').trim();
     if (cleanQuery.isEmpty) return [];
 
-    // Direct YouTube Video URL support
-    final videoId = VideoId.parseVideoId(cleanQuery);
-    if (videoId != null) {
+    // Direct YouTube Video/Playlist URL support (Only run if query is an actual URL)
+    if (cleanQuery.startsWith('http://') ||
+        cleanQuery.startsWith('https://') ||
+        cleanQuery.contains('youtube.com/') ||
+        cleanQuery.contains('youtu.be/')) {
       try {
-        final video = await _yt.videos.get(videoId);
-        return [returnSongFromVideo(video, 0)];
+        final videoId = VideoId.parseVideoId(cleanQuery);
+        if (videoId != null) {
+          final video = await _yt.videos.get(videoId);
+          return [returnSongFromVideo(video, 0)];
+        }
       } catch (_) {}
-    }
 
-    // Direct YouTube Playlist URL support
-    final playlistId = PlaylistId.parsePlaylistId(cleanQuery);
-    if (playlistId != null) {
-      return await getSongsFromPlaylist(playlistId, limit: limit);
+      try {
+        final playlistId = PlaylistId.parsePlaylistId(cleanQuery);
+        if (playlistId != null) {
+          return await getSongsFromPlaylist(playlistId, limit: limit);
+        }
+      } catch (_) {}
     }
 
     // 1. YouTube Official InnerTube API Engine (Fastest & 100% Reliable JSON)

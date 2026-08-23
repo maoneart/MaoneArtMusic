@@ -193,28 +193,28 @@ class MusicService {
 
     if (category == 'Indonesia') {
       // Top 50 Indonesia YouTube Music Chart Playlist
-      songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 30);
-      if (songs.length < 10) {
-        songs = await searchSongs('Bernadya Sal Priadi Mahalini Juicy Luicy Nadhif Basalamah 2026', limit: 30);
+      songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 50);
+      if (songs.length < 20) {
+        songs = await searchSongs('Bernadya Sal Priadi Mahalini Juicy Luicy Nadhif Basalamah 2026', limit: 50);
       }
     } else if (category == 'Global') {
       // Top 50 Global YouTube Music Charts Playlist
-      songs = await getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 30);
-      if (songs.length < 10) {
-        songs = await searchSongs('Top Billboard Hot 100 Hits 2026 Lady Gaga Bruno Mars Sabrina Carpenter', limit: 30);
+      songs = await getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 50);
+      if (songs.length < 20) {
+        songs = await searchSongs('Top Billboard Hot 100 Hits 2026 Lady Gaga Bruno Mars Sabrina Carpenter', limit: 50);
       }
     } else if (category == 'Viral TikTok') {
-      // Viral TikTok Hits Playlist
-      songs = await getSongsFromPlaylist('PLDIoUOhQQPlXr63I_vwF9GD8sAKh77dWU', limit: 30);
-      if (songs.length < 10) {
-        songs = await searchSongs('Viral TikTok Indonesia FYP 2026 Hits Terbaru', limit: 30);
+      // Top 50 Viral TikTok Hits Playlist
+      songs = await getSongsFromPlaylist('PLDIoUOhQQPlXr63I_vwF9GD8sAKh77dWU', limit: 50);
+      if (songs.length < 20) {
+        songs = await searchSongs('Viral TikTok Indonesia FYP 2026 Hits Terbaru', limit: 50);
       }
     } else {
-      // Default: Top 20 Trending (10 Lagu Teratas Indonesia + 10 Lagu Teratas Barat/Global)
+      // Default: Top 50 Trending (25 Lagu Teratas Indonesia + 25 Lagu Teratas Barat/Global)
       try {
         final results = await Future.wait([
-          getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 10),
-          getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 10),
+          getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 25),
+          getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 25),
         ]);
 
         final List<Song> indoList = results[0];
@@ -229,12 +229,12 @@ class MusicService {
         }
       } catch (_) {}
 
-      if (songs.length < 10) {
-        final backup = await searchSongs('Top Hits 2026 Indonesia Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 20);
+      if (songs.length < 25) {
+        final backup = await searchSongs('Top Hits 2026 Indonesia Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 50);
         for (final s in backup) {
           if (!songs.any((x) => x.id == s.id)) {
             songs.add(s);
-            if (songs.length >= 20) break;
+            if (songs.length >= 50) break;
           }
         }
       }

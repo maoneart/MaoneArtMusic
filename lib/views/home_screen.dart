@@ -238,8 +238,8 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "Top 20 Trending",
-                        subtitle: "10 Indo + 10 Barat Teratas",
+                        title: "Top 50 Trending",
+                        subtitle: "25 Indo + 25 Barat Teratas",
                         categoryKey: "Trending",
                         gradientColors: [const Color(0xFF134E5E), const Color(0xFF71B280)],
                         icon: Icons.whatshot,

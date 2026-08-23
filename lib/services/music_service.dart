@@ -171,35 +171,60 @@ class MusicService {
   Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
     List<Song> songs = [];
 
+    // Curated fresh 2026 hits seeds
+    final List<String> modernIndoSeeds = [
+      'Bernadya Satu Bulan',
+      'Sal Priadi Gala Bunga Matahari',
+      'Rose Bruno Mars APT',
+      'Lady Gaga Bruno Mars Die With A Smile',
+      'Billie Eilish Birds of a Feather',
+      'Mahalini Mati Matian',
+      'Juicy Luicy Lampu Kuning',
+      'Sabrina Carpenter Espresso',
+      'Tiara Andini Kupu Kupu',
+      'Nadhif Basalamah Penjaga Hati',
+      'Denny Caknan Sigar',
+      'Hindia Kita Ke Sana',
+      'Yura Yunita Risalah Hati',
+      'Anggi Marito Kisah Yang Salah',
+      'Ghea Indrawari Teramini',
+      'Rizky Febian Bermuara',
+    ];
+
     if (category == 'Indonesia') {
-      // Top 50 Indonesia YouTube Music
+      // Top 50 Indonesia YouTube Music Chart Playlist
       songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 30);
       if (songs.length < 10) {
-        songs = await searchSongs('Top Lagu Indonesia Populer Terbaru 2026', limit: 30);
+        songs = await searchSongs('Bernadya Sal Priadi Mahalini Juicy Luicy Nadhif Basalamah 2026', limit: 30);
       }
     } else if (category == 'Global') {
-      // Top 50 Global YouTube Music Charts
+      // Top 50 Global YouTube Music Charts Playlist
       songs = await getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 30);
       if (songs.length < 10) {
-        songs = await searchSongs('Top 50 Global Hits Billboard 2026', limit: 30);
+        songs = await searchSongs('Top Billboard Hot 100 Hits 2026 Lady Gaga Bruno Mars Sabrina Carpenter', limit: 30);
       }
     } else if (category == 'Viral TikTok') {
-      // Viral TikTok Hits
-      songs = await searchSongs('Viral TikTok Indonesia FYP 2026 Terpopuler', limit: 30);
+      // Viral TikTok Hits Playlist
+      songs = await getSongsFromPlaylist('PLDIoUOhQQPlXr63I_vwF9GD8sAKh77dWU', limit: 30);
       if (songs.length < 10) {
-        songs = await getSongsFromPlaylist('PLgzTt0k8mXzEk586ze4BjvDXR7c-TUSnx', limit: 25);
+        songs = await searchSongs('Viral TikTok Indonesia FYP 2026 Hits Terbaru', limit: 30);
       }
     } else {
-      // Default: Top Trending Mix
-      songs = await searchSongs('Top Hits Indonesia & Global 2026 Paling Enak Didengar', limit: 30);
+      // Default: Top Trending 2026 Mix
+      songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 25);
       if (songs.length < 10) {
-        songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 25);
+        songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 30);
       }
     }
 
-    // Fallback if network was limited
+    // Fallback with fresh 2026 songs if needed
     if (songs.isEmpty) {
-      songs = await searchSongs('Separuh Aku NOAH Mahalini Bernadya Tulus', limit: 20);
+      for (final seed in modernIndoSeeds.take(8)) {
+        final res = await searchSongs(seed, limit: 1);
+        if (res.isNotEmpty) {
+          songs.add(res.first);
+        }
+      }
     }
 
     return songs;

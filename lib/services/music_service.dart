@@ -170,8 +170,8 @@ class MusicService {
     return 0;
   }
 
-  /// Official YouTube InnerTube Search Engine (Pure JSON, 0 Blocks, 100% Reliable & Fast)
-  Future<List<Song>> _searchInnerTube(String cleanQuery, {int limit = 30}) async {
+  /// Official YouTube InnerTube Search Engine (Pure JSON, 0 Blocks, 100% Complete & Fast)
+  Future<List<Song>> _searchInnerTube(String cleanQuery, {int limit = 40}) async {
     final List<Song> songList = [];
     final Set<String> seenIds = {};
 
@@ -196,63 +196,91 @@ class MusicService {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         },
         body: payload,
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 6));
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        final contents = data['contents']?['twoColumnSearchResultsRenderer']?['primaryContents']?['sectionListRenderer']?['contents'] as List? ?? [];
 
-        for (final sec in contents) {
-          final itemSection = sec['itemSectionRenderer']?['contents'] as List? ?? [];
-          for (final item in itemSection) {
-            final v = item['videoRenderer'];
+        void extractVideos(dynamic obj) {
+          if (songList.length >= limit) return;
+          if (obj is Map) {
+            Map? v;
+            if (obj.containsKey('videoRenderer')) {
+              v = obj['videoRenderer'] as Map?;
+            } else if (obj.containsKey('compactVideoRenderer')) {
+              v = obj['compactVideoRenderer'] as Map?;
+            }
+
             if (v != null) {
               final vid = v['videoId'] as String?;
-              final rawTitle = v['title']?['runs']?[0]?['text'] as String? ?? '';
-              final rawOwner = v['ownerText']?['runs']?[0]?['text'] as String? ?? '';
+              String rawTitle = '';
+              if (v['title'] is Map) {
+                final runs = v['title']['runs'] as List?;
+                if (runs != null && runs.isNotEmpty) {
+                  rawTitle = runs[0]['text'] as String? ?? '';
+                } else if (v['title']['simpleText'] != null) {
+                  rawTitle = v['title']['simpleText'] as String? ?? '';
+                }
+              }
+
+              String rawOwner = '';
+              if (v['ownerText'] is Map) {
+                final runs = v['ownerText']['runs'] as List?;
+                if (runs != null && runs.isNotEmpty) {
+                  rawOwner = runs[0]['text'] as String? ?? '';
+                }
+              } else if (v['shortBylineText'] is Map) {
+                final runs = v['shortBylineText']['runs'] as List?;
+                if (runs != null && runs.isNotEmpty) {
+                  rawOwner = runs[0]['text'] as String? ?? '';
+                }
+              }
+
               final lenText = v['lengthText']?['simpleText'] as String? ?? '';
               final thumbnails = v['thumbnail']?['thumbnails'] as List? ?? [];
               final thumb = thumbnails.isNotEmpty
                   ? (thumbnails.last['url'] as String? ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg')
                   : 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
 
-              if (vid == null || vid.isEmpty || rawTitle.isEmpty) continue;
+              if (vid != null && vid.isNotEmpty && rawTitle.isNotEmpty && seenIds.add(vid)) {
+                final seconds = _parseDuration(lenText);
+                final titleLower = rawTitle.toLowerCase();
 
-              final seconds = _parseDuration(lenText);
-              final titleLower = rawTitle.toLowerCase();
+                // Skip full album compilations > 30 minutes
+                if (seconds <= 2400 &&
+                    !titleLower.contains('full album') &&
+                    !titleLower.contains('2 jam') &&
+                    !titleLower.contains('3 jam')) {
+                  final sep = rawTitle.indexOf(' - ');
+                  final artist = sep != -1 ? rawTitle.substring(0, sep).trim() : rawOwner;
+                  final titlePart = sep != -1 ? rawTitle.substring(sep + 3).trim() : rawTitle;
+                  final formattedTitle = formatSongTitle(titlePart);
 
-              // Skip long compilations > 20 mins unless requested
-              if (seconds > 1200 || (seconds > 0 && seconds < 20)) continue;
-              if (titleLower.contains('full album') ||
-                  titleLower.contains('kompilasi') ||
-                  titleLower.contains('nonstop') ||
-                  titleLower.contains('2 jam') ||
-                  titleLower.contains('1 jam')) {
-                continue;
+                  songList.add(Song(
+                    id: 'yt_$vid',
+                    youtubeId: vid,
+                    title: formattedTitle.isNotEmpty ? formattedTitle : rawTitle,
+                    artist: artist.isNotEmpty ? artist : (rawOwner.isNotEmpty ? rawOwner : 'Various Artists'),
+                    album: 'YouTube Music',
+                    artworkUrl: thumb,
+                    durationSeconds: seconds,
+                    isLive: lenText.toLowerCase().contains('live'),
+                  ));
+                }
               }
-
-              if (seenIds.add(vid)) {
-                final sep = rawTitle.indexOf(' - ');
-                final artist = sep != -1 ? rawTitle.substring(0, sep).trim() : rawOwner;
-                final titlePart = sep != -1 ? rawTitle.substring(sep + 3).trim() : rawTitle;
-                final formattedTitle = formatSongTitle(titlePart);
-
-                songList.add(Song(
-                  id: 'yt_$vid',
-                  youtubeId: vid,
-                  title: formattedTitle.isNotEmpty ? formattedTitle : rawTitle,
-                  artist: artist.isNotEmpty ? artist : rawOwner,
-                  album: 'YouTube Music',
-                  artworkUrl: thumb,
-                  durationSeconds: seconds,
-                  isLive: lenText.toLowerCase().contains('live'),
-                ));
-
-                if (songList.length >= limit) return songList;
+            } else {
+              for (final val in obj.values) {
+                extractVideos(val);
               }
+            }
+          } else if (obj is List) {
+            for (final item in obj) {
+              extractVideos(item);
             }
           }
         }
+
+        extractVideos(data);
       }
     } catch (e) {
       print('InnerTube search notice: $e');

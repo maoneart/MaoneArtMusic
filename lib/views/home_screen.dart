@@ -39,19 +39,26 @@ class HomeScreen extends ConsumerWidget {
                       Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(6),
+                            width: 38,
+                            height: 38,
                             decoration: BoxDecoration(
-                              color: MaoneArtTheme.spotifyGreen,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: MaoneArtTheme.spotifyGreen.withOpacity(0.5),
-                                  blurRadius: 10,
+                                  color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.45),
+                                  blurRadius: 12,
                                   spreadRadius: 1,
                                 ),
                               ],
                             ),
-                            child: const Icon(Icons.graphic_eq, color: Colors.black, size: 20),
+                            child: ClipOval(
+                              child: Image.asset(
+                                'assets/images/ic_launcher.png',
+                                width: 38,
+                                height: 38,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 10),
                           Column(
@@ -69,7 +76,7 @@ class HomeScreen extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                "Spotify Style Trending & Streaming",
+                                "Streaming & Tangga Lagu Bebas Iklan",
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: Colors.white.withOpacity(0.6),
@@ -91,7 +98,7 @@ class HomeScreen extends ConsumerWidget {
                   ),
                 ),
 
-                // Featured Hero Banner (Spotify Top Charts Style)
+                // Featured Hero Banner
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
                   child: Container(
@@ -131,7 +138,7 @@ class HomeScreen extends ConsumerWidget {
                                   Icon(Icons.whatshot, size: 14, color: MaoneArtTheme.spotifyGreenBright),
                                   SizedBox(width: 4),
                                   Text(
-                                    "SPOTIFY TRENDING",
+                                    "MAONEART TRENDING",
                                     style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
@@ -150,7 +157,7 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          "Top 50 Spotify Charts & Viral Hits",
+                          "Top 100 Charts & Viral Hits",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,

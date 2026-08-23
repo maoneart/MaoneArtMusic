@@ -158,7 +158,7 @@ class AboutScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "Aplikasi pemutar musik modern open source berbasis Flutter dengan antarmuka elegan terinspirasi Spotify. Menyajikan streaming audio cepat tanpa batas, pencarian cerdas instan, lirik lagu, dan tangga lagu terpopuler secara gratis.",
+                      "Aplikasi pemutar musik modern open source berbasis Flutter dengan antarmuka Glassmorphism elegan karya MaoneArt. Menyajikan streaming audio cepat tanpa batas, pencarian cerdas instan, lirik lagu, dan tangga lagu terpopuler secara gratis.",
                       style: TextStyle(
                         fontSize: 13,
                         height: 1.6,

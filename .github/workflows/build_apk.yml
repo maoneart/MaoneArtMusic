@@ -1,56 +1,66 @@
-name: Build Android APK (MaoneArt Music)
+name: Build MaoneArt Music APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
   workflow_dispatch:
-
-permissions:
-  contents: write
 
 jobs:
   build:
+    name: Build Android Release APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Set up Java JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter SDK
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
           channel: 'stable'
           cache: true
 
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build APK (Release)
+      - name: Build Universal Release APK
         run: flutter build apk --release
 
-      - name: Upload APK Artifacts
+      - name: Upload APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: MaoneArtMusic-APK
+          name: MaoneArtMusic-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Create or Update Release
-        uses: softprops/action-gh-release@v1
-        if: github.ref == 'refs/heads/main'
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: latest
-          name: "MaoneArt Music Latest APK"
+          tag_name: v1.0.0
+          name: 'MaoneArt Music v1.0.0 (Release)'
           body: |
-            🎵 **MaoneArt Music - Automatic APK Build**
-            - Update: UI Spotify Trending Charts & Ranking Musik
-            - Bebas Iklan & Kualitas Tinggi
+            ## 🎵 MaoneArt Music - Android Release APK
+            
+            Versi terbaru aplikasi MaoneArt Music dengan audio streaming engine berbasis Musify!
+            
+            ### ✨ Fitur:
+            - **Musify YouTube Audio Engine**: Audio extraction super cepat, direct YouTube Music streams.
+            - **No 30s Previews**: Pure full-length high quality audio (320kbps).
+            - **Spotify Style Glassmorphic UI**: Ambient glow, modern charts & pill category chips.
+            - **Background Playback & Lockscreen**: MediaSession notification controls & lockscreen artwork.
+            - **Lirik & Antrean**: Fitur lirik lagu dan daftar antrean bawaan.
+            - **Offline Library**: Simpan lagu favorit & playlist kustom secara lokal.
+            
+            📥 **Download APK di bawah ini dan instal langsung di Android Anda!**
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

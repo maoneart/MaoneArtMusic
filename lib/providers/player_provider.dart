@@ -184,19 +184,23 @@ class PlayerStateNotifier extends ChangeNotifier {
     // 4. Save to Recent History
     _recordRecentSong(_currentSong!);
 
-    // 5. Pre-fetch next track in background (Musify 0-delay feature)
+    // 5. Pre-fetch next tracks in background (0ms delay for subsequent tracks)
     if (_queue.length > 1) {
       final int nextIndex = (_currentIndex + 1) % _queue.length;
       YoutubeAudioExtractor.preFetchStreamUrl(_queue[nextIndex], quality: _audioQuality);
+      if (_queue.length > 2) {
+        final int afterNextIndex = (_currentIndex + 2) % _queue.length;
+        YoutubeAudioExtractor.preFetchStreamUrl(_queue[afterNextIndex], quality: _audioQuality);
+      }
     }
 
-    // 6. Fetch Lyrics in background
+    // 6. Fetch Lyrics asynchronously in background
     _loadLyricsAsync(_currentSong!);
 
     try {
       // 7. Extract Stream Candidate URLs
       final candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(_currentSong!, quality: _audioQuality)
-          .timeout(const Duration(seconds: 12));
+          .timeout(const Duration(seconds: 10));
 
       if (_playRequestId != currentRequestId) return;
 
@@ -207,7 +211,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 8. Attempt playback with fallback across candidate URLs
+      // 8. Low-Latency Instant Playback with Failover
       bool sourceSet = false;
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
@@ -229,7 +233,10 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 10));
+          // Concurrently trigger play() so audio outputs instantly upon first chunk
+          final loadFuture = _player.setAudioSource(audioSource, preload: true);
+          _player.play();
+          await loadFuture.timeout(const Duration(seconds: 8));
           sourceSet = true;
           break;
         } catch (sourceErr) {
@@ -247,7 +254,6 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      await _player.play();
       _status = PlayerLoadingStatus.playing;
       notifyListeners();
     } catch (e) {

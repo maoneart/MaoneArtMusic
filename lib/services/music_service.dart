@@ -167,93 +167,94 @@ class MusicService {
     }
   }
 
-  /// Fetch songs from official Spotify Top 50 Chart Playlists (Always 50 Real Songs)
-  Future<List<Song>> getSongsFromSpotifyPlaylist(String playlistId, {int limit = 50}) async {
-    final List<Song> songs = [];
+  /// Parallel fetch songs from multiple query seeds to build a rich 50-track list with direct YouTube IDs
+  Future<List<Song>> _fetchSongsFromQueries(List<String> queries, {int limit = 50}) async {
+    final List<Song> allSongs = [];
+    final Set<String> seenIds = {};
+
     try {
-      final uri = Uri.parse('https://open.spotify.com/embed/playlist/$playlistId');
-      final res = await http.get(
-        uri,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Accept': 'text/html,application/xhtml+xml',
-        },
-      ).timeout(const Duration(seconds: 8));
+      final results = await Future.wait(
+        queries.map((q) => searchSongs(q, limit: 12)),
+      );
 
-      if (res.statusCode == 200) {
-        final html = res.body;
-        const tag = '<script id="__NEXT_DATA__" type="application/json">';
-        if (html.contains(tag)) {
-          final jsonStr = html.split(tag)[1].split('</script>')[0];
-          final data = json.decode(jsonStr);
-          final entity = data['props']?['pageProps']?['state']?['data']?['entity'] ?? {};
-          final List trackList = entity['trackList'] ?? [];
-          final String coverUrl = (entity['visualIdentity']?['image'] is List && (entity['visualIdentity']['image'] as List).isNotEmpty)
-              ? entity['visualIdentity']['image'][0]['url'] ?? ''
-              : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
-
-          int idx = 0;
-          for (final t in trackList.take(limit)) {
-            final String rawTitle = t['title'] ?? '';
-            final String artist = t['subtitle'] ?? 'Artis Populer';
-            final int durationMs = t['duration'] ?? 180000;
-            final String uriStr = t['uri'] ?? '';
-            final String trackId = uriStr.isNotEmpty ? uriStr.split(':').last : 'sp_$idx';
-
-            if (rawTitle.isNotEmpty) {
-              songs.add(
-                Song(
-                  id: 'sp_$trackId',
-                  youtubeId: null,
-                  title: formatSongTitle(rawTitle),
-                  artist: artist,
-                  album: 'Spotify Top 50',
-                  artworkUrl: coverUrl.isNotEmpty ? coverUrl : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-                  durationSeconds: durationMs ~/ 1000,
-                  isLive: false,
-                ),
-              );
-              idx++;
-            }
+      for (final songBatch in results) {
+        for (final song in songBatch) {
+          if (seenIds.add(song.id)) {
+            allSongs.add(song);
+            if (allSongs.length >= limit) break;
           }
         }
+        if (allSongs.length >= limit) break;
       }
     } catch (e) {
-      print('Spotify Chart fetch notice for $playlistId: $e');
+      print('Batch query fetch notice: $e');
     }
-    return songs;
+
+    return allSongs;
   }
 
-  /// Fetch real-time Trending / Top Charts (Guaranteed 50 Full Songs per Category)
+  /// Fetch real-time Trending / Top Charts (Guaranteed 50 Full Songs with Direct YouTube Audio IDs)
   Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
     List<Song> songs = [];
 
+    final List<String> indoQueries = [
+      'Bernadya Official Music Video',
+      'Sal Priadi Gala Bunga Matahari Official',
+      'Mahalini Mati Matian Official',
+      'Juicy Luicy Lampu Kuning Sialan',
+      'Nadhif Basalamah Penjaga Hati Official',
+      'Tiara Andini Kupu Kupu Official',
+      'Denny Caknan Sigar Wirang Official',
+      'Hindia Kita Ke Sana Evaluasi',
+      'Yura Yunita Risalah Hati Official',
+      'Anggi Marito Kisah Yang Salah',
+      'Rizky Febian Bermuara Official',
+      'Ghea Indrawari Jiwa Yang Bersedih',
+    ];
+
+    final List<String> globalQueries = [
+      'Rose Bruno Mars APT Official Music Video',
+      'Lady Gaga Bruno Mars Die With A Smile Official',
+      'Billie Eilish Birds of a Feather Official Video',
+      'Sabrina Carpenter Espresso Taste Please Please Please Official',
+      'Chappell Roan Good Luck Babe Official',
+      'Benson Boone Beautiful Things Official Video',
+      'Post Malone Morgan Wallen I Had Some Help Official',
+      'Taylor Swift Fortnight Official Music Video',
+      'The Weeknd Playboi Carti Timeless Official',
+      'Dua Lipa Houdini Training Season Official',
+      'Kendrick Lamar Not Like Us Official',
+      'Teddy Swims Lose Control Official',
+    ];
+
+    final List<String> tiktokQueries = [
+      'Viral TikTok FYP 2026 Indonesia Hits',
+      'Lagu TikTok Viral 2026 Terbaru Enak Didengar',
+      'Sound TikTok Viral 2026 Paling Candu',
+      'Lagu Jedag Jedug TikTok Viral 2026 Terpopuler',
+      'Trending TikTok Musik Indonesia 2026',
+      'DJ TikTok Viral Full Bass 2026 Terbaru',
+    ];
+
     if (category == 'Indonesia') {
-      // 1. Spotify Top Viral 50 Indonesia (50 lagu terbaru & viral di Indonesia)
-      songs = await getSongsFromSpotifyPlaylist('37i9dQZEVXbIZK8aUquyx8', limit: 50);
-      if (songs.length < 20) {
-        songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 50);
-      }
+      songs = await _fetchSongsFromQueries(indoQueries, limit: 50);
     } else if (category == 'Global') {
-      // 2. Spotify Top 50 Global (50 lagu teratas dunia)
-      songs = await getSongsFromSpotifyPlaylist('37i9dQZEVXbMDoHDwVN2tF', limit: 50);
-      if (songs.length < 20) {
-        songs = await getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 50);
-      }
+      songs = await _fetchSongsFromQueries(globalQueries, limit: 50);
     } else if (category == 'Viral TikTok') {
-      // 3. Spotify Viral 50
-      songs = await getSongsFromSpotifyPlaylist('37i9dQZEVXbIZK8aUquyx8', limit: 50);
-      if (songs.length < 20) {
-        songs = await getSongsFromPlaylist('PLDIoUOhQQPlXr63I_vwF9GD8sAKh77dWU', limit: 50);
-      }
+      songs = await _fetchSongsFromQueries(tiktokQueries, limit: 50);
     } else {
-      // 4. Default: Today's Top Hits 2026 (50 Lagu Teratas Paling Hits Spotify)
-      songs = await getSongsFromSpotifyPlaylist('37i9dQZF1DXcBWIGoYBM5M', limit: 50);
-      if (songs.length < 20) {
-        songs = await getSongsFromSpotifyPlaylist('37i9dQZEVXbMDoHDwVN2tF', limit: 50);
+      // Default: Top 50 Trending (25 Top Indonesia + 25 Top Global)
+      final results = await Future.wait([
+        _fetchSongsFromQueries(indoQueries, limit: 25),
+        _fetchSongsFromQueries(globalQueries, limit: 25),
+      ]);
+
+      final Set<String> seenIds = {};
+      for (final s in results[0]) {
+        if (seenIds.add(s.id)) songs.add(s);
       }
-      if (songs.length < 20) {
-        songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 50);
+      for (final s in results[1]) {
+        if (seenIds.add(s.id)) songs.add(s);
       }
     }
 

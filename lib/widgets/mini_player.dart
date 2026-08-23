@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/player_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../views/player_screen.dart';

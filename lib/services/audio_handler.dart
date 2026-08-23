@@ -1,23 +1,26 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_session/audio_session.dart';
 
-AudioHandler? globalAudioHandler;
+MyAudioHandler? globalAudioHandler;
 
-Future<AudioHandler?> initAudioService() async {
+Future<MyAudioHandler?> initAudioService() async {
   try {
-    globalAudioHandler = await AudioService.init(
+    final handler = await AudioService.init(
       builder: () => MyAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.maoneart.music.channel.audio',
         androidNotificationChannelName: 'MaoneArt Music Playback',
-        androidNotificationOngoing: false,
+        androidNotificationOngoing: true,
         androidStopForegroundOnPause: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
         androidShowNotificationBadge: true,
-        notificationColor: Color(0xFF00E5FF),
+        notificationColor: Color(0xFF00F0FF),
       ),
     );
+    globalAudioHandler = handler;
     return globalAudioHandler;
   } catch (e) {
     print('AudioService initialization error: $e');
@@ -26,15 +29,45 @@ Future<AudioHandler?> initAudioService() async {
 }
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+  late final AudioPlayer _player;
 
-  Function()? onSkipToNextCallback;
-  Function()? onSkipToPreviousCallback;
+  Future<void> Function()? onSkipToNextCallback;
+  Future<void> Function()? onSkipToPreviousCallback;
+  Future<void> Function()? onPlayCallback;
+  Future<void> Function()? onPauseCallback;
+  Future<void> Function(Duration)? onSeekCallback;
 
   AudioPlayer get player => _player;
 
   MyAudioHandler() {
+    _player = AudioPlayer(
+      audioLoadConfiguration: const AudioLoadConfiguration(
+        androidLoadControl: AndroidLoadControl(
+          maxBufferDuration: Duration(seconds: 60),
+          bufferForPlaybackDuration: Duration(milliseconds: 500),
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 3),
+        ),
+      ),
+    );
+
+    _initAudioSession();
     _initListeners();
+  }
+
+  Future<void> _initAudioSession() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.music());
+
+      _player.setAndroidAudioAttributes(
+        const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.music,
+          usage: AndroidAudioUsage.media,
+        ),
+      );
+    } catch (e) {
+      print("AudioSession setup notice: $e");
+    }
   }
 
   void _initListeners() {
@@ -79,6 +112,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           MediaControl.skipToPrevious,
           if (isPlaying) MediaControl.pause else MediaControl.play,
           MediaControl.skipToNext,
+          MediaControl.stop,
         ],
         systemActions: const {
           MediaAction.seek,
@@ -86,6 +120,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
           MediaAction.skipToPrevious,
           MediaAction.play,
           MediaAction.pause,
+          MediaAction.stop,
         },
         androidCompactActionIndices: const [0, 1, 2],
         processingState: audioProcessingState,
@@ -95,13 +130,31 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   }
 
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    if (onPlayCallback != null) {
+      await onPlayCallback!();
+    } else {
+      await _player.play();
+    }
+  }
 
   @override
-  Future<void> pause() => _player.pause();
+  Future<void> pause() async {
+    if (onPauseCallback != null) {
+      await onPauseCallback!();
+    } else {
+      await _player.pause();
+    }
+  }
 
   @override
-  Future<void> seek(Duration position) => _player.seek(position);
+  Future<void> seek(Duration position) async {
+    if (onSeekCallback != null) {
+      await onSeekCallback!(position);
+    } else {
+      await _player.seek(position);
+    }
+  }
 
   @override
   Future<void> stop() => _player.stop();
@@ -133,7 +186,7 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
       title: title,
       artist: artist,
       album: album,
-      artUri: Uri.parse(artUri),
+      artUri: Uri.tryParse(artUri),
       duration: duration,
     ));
   }

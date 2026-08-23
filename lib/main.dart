@@ -10,7 +10,7 @@ import 'views/settings_screen.dart';
 import 'widgets/glass_container.dart';
 import 'widgets/mini_player.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -19,10 +19,14 @@ void main() {
     ),
   );
 
-  runApp(const ProviderScope(child: MaoneArtMusicApp()));
+  // Initialize AudioService for background playback & notification controls
+  try {
+    await initAudioService();
+  } catch (e) {
+    print("AudioService init error: $e");
+  }
 
-  // Initialize AudioService in background after UI startup to prevent blank black screen
-  initAudioService();
+  runApp(const ProviderScope(child: MaoneArtMusicApp()));
 }
 
 class MaoneArtMusicApp extends StatelessWidget {

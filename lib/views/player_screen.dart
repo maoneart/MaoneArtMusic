@@ -9,11 +9,19 @@ import '../widgets/glass_container.dart';
 import '../widgets/seek_bar.dart';
 import '../widgets/app_artwork.dart';
 
-class PlayerScreen extends ConsumerWidget {
+class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({Key? key}) : super(key: key);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+  bool _showLyrics = false;
+  bool _showQueue = false;
+
+  @override
+  Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
     final song = playerState.currentSong;
 
@@ -38,6 +46,32 @@ class PlayerScreen extends ConsumerWidget {
           style: TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.bold),
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.lyrics_outlined,
+              color: _showLyrics ? MaoneArtTheme.primaryCyan : Colors.white70,
+            ),
+            tooltip: "Lirik",
+            onPressed: () {
+              setState(() {
+                _showLyrics = !_showLyrics;
+                _showQueue = false;
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.queue_music,
+              color: _showQueue ? MaoneArtTheme.primaryCyan : Colors.white70,
+            ),
+            tooltip: "Antrean",
+            onPressed: () {
+              setState(() {
+                _showQueue = !_showQueue;
+                _showLyrics = false;
+              });
+            },
+          ),
           IconButton(
             icon: Icon(
               isFav ? Icons.favorite : Icons.favorite_border,
@@ -65,7 +99,7 @@ class PlayerScreen extends ConsumerWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
               child: Container(
-                color: Colors.black.withOpacity(0.65),
+                color: Colors.black.withOpacity(0.68),
               ),
             ),
           ),
@@ -73,69 +107,66 @@ class PlayerScreen extends ConsumerWidget {
           // Main Player Content
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
               child: Column(
                 children: [
-                  const Spacer(),
-
-                  // Big Artwork with Glass Glow & Gradient Fallback
-                  Hero(
-                    tag: 'player_artwork',
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
-                            blurRadius: 30,
-                            spreadRadius: 5,
-                          ),
-                        ],
-                      ),
-                      child: AppArtwork(
-                        artworkUrl: song.artworkUrl,
-                        width: MediaQuery.of(context).size.width * 0.78,
-                        height: MediaQuery.of(context).size.width * 0.78,
-                        borderRadius: 24,
-                        iconSize: 80,
-                      ),
-                    ),
+                  Expanded(
+                    child: _showLyrics
+                        ? _buildLyricsView(playerState)
+                        : _showQueue
+                            ? _buildQueueView(playerState)
+                            : _buildMainArtwork(context, song),
                   ),
 
-                  const Spacer(),
+                  const SizedBox(height: 12),
 
                   // Song Title & Artist Info Box
                   GlassContainer(
                     borderRadius: 20,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
                       children: [
-                        Text(
-                          song.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                song.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${song.artist} • ${song.album}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${song.artist} • ${song.album}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.7),
+                        if (playerState.errorMessage != null)
+                          IconButton(
+                            icon: const Icon(Icons.refresh, color: Colors.amberAccent),
+                            tooltip: "Coba Putar Ulang",
+                            onPressed: () {
+                              ref.read(playerProvider).playSong(song);
+                            },
                           ),
-                        ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
                   // Seek Bar
                   SeekBar(
@@ -146,7 +177,7 @@ class PlayerScreen extends ConsumerWidget {
                     },
                   ),
 
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // Audio Controls
                   Row(
@@ -216,10 +247,143 @@ class PlayerScreen extends ConsumerWidget {
                       ),
                     ],
                   ),
-
-                  const Spacer(),
+                  const SizedBox(height: 12),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainArtwork(BuildContext context, dynamic song) {
+    return Center(
+      child: Hero(
+        tag: 'player_artwork',
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
+                blurRadius: 30,
+                spreadRadius: 5,
+              ),
+            ],
+          ),
+          child: AppArtwork(
+            artworkUrl: song.artworkUrl,
+            width: MediaQuery.of(context).size.width * 0.76,
+            height: MediaQuery.of(context).size.width * 0.76,
+            borderRadius: 24,
+            iconSize: 80,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLyricsView(PlayerStateNotifier playerState) {
+    return GlassContainer(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                "Lirik Lagu",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: MaoneArtTheme.primaryCyan),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                onPressed: () => setState(() => _showLyrics = false),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white24),
+          Expanded(
+            child: playerState.isLoadingLyrics
+                ? const Center(child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan))
+                : playerState.currentLyrics != null && playerState.currentLyrics!.isNotEmpty
+                    ? SingleChildScrollView(
+                        child: Text(
+                          playerState.currentLyrics!,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.8,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    : const Center(
+                        child: Text(
+                          "Lirik tidak tersedia untuk lagu ini.",
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQueueView(PlayerStateNotifier playerState) {
+    return GlassContainer(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Daftar Antrean (${playerState.queue.length})",
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: MaoneArtTheme.primaryCyan),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                onPressed: () => setState(() => _showQueue = false),
+              ),
+            ],
+          ),
+          const Divider(color: Colors.white24),
+          Expanded(
+            child: ListView.builder(
+              itemCount: playerState.queue.length,
+              itemBuilder: (context, index) {
+                final song = playerState.queue[index];
+                final isCurrent = playerState.currentIndex == index;
+                return ListTile(
+                  dense: true,
+                  leading: isCurrent
+                      ? const Icon(Icons.volume_up, color: MaoneArtTheme.spotifyGreenBright)
+                      : Text("${index + 1}", style: const TextStyle(color: Colors.white54)),
+                  title: Text(
+                    song.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isCurrent ? MaoneArtTheme.spotifyGreenBright : Colors.white,
+                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  ),
+                  subtitle: Text(
+                    song.artist,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  onTap: () {
+                    ref.read(playerProvider).playSong(song, index: index);
+                  },
+                );
+              },
             ),
           ),
         ],

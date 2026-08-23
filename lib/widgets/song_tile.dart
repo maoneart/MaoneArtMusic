@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/song.dart';
 import '../theme/maoneart_theme.dart';
 import 'glass_container.dart';

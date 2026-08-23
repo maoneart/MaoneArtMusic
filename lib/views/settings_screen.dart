@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/player_provider.dart';
+import '../services/youtube_audio_extractor.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
@@ -65,6 +67,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           setState(() {
                             _audioQuality = val;
                           });
+                          ref.read(playerProvider).setAudioQuality(val);
                         }
                       },
                     ),
@@ -82,7 +85,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   final confirm = await MaoneArtGlassModal.showConfirmModal(
                     context: context,
                     title: "Bersihkan Cache Audio?",
-                    message: "Ini akan menghapus seluruh file cache temporary audio dan metadata.",
+                    message: "Ini akan menghapus seluruh file cache memory audio stream dan metadata.",
                     confirmText: "Bersihkan",
                     cancelText: "Batal",
                     icon: Icons.cleaning_services_outlined,
@@ -90,10 +93,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
 
                   if (confirm == true && mounted) {
+                    YoutubeAudioExtractor.clearCache();
                     await MaoneArtGlassModal.showAlertModal(
                       context: context,
                       title: "Cache Dibersihkan",
-                      message: "Seluruh cache temporary berhasil dibersihkan.",
+                      message: "Seluruh cache temporary audio berhasil dibersihkan.",
                       icon: Icons.check_circle_outline,
                       iconColor: MaoneArtTheme.accentGreen,
                     );
@@ -141,7 +145,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      "Klien Musik Open Source berbasis Flutter & YouTube Music Audio Engine.",
+                      "Klien Musik Open Source berbasis Flutter & Musify YouTube Audio Engine.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,

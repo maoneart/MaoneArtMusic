@@ -2,16 +2,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
 import '../services/youtube_audio_extractor.dart';
 import '../services/audio_handler.dart';
+import '../services/storage_service.dart';
+import '../services/music_service.dart';
 
 enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 enum RepeatMode { off, all, one }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  final AudioPlayer _localPlayer = AudioPlayer();
+  final StorageService _storageService = StorageService();
+  final MusicService _musicService = MusicService();
+
+  AudioPlayer get _player => globalAudioHandler?.player ?? _localPlayer;
 
   Song? _currentSong;
   List<Song> _queue = [];
@@ -21,7 +26,10 @@ class PlayerStateNotifier extends ChangeNotifier {
   Duration _duration = Duration.zero;
   bool _isShuffle = false;
   RepeatMode _repeatMode = RepeatMode.off;
+  String _audioQuality = 'high'; // 'high', 'medium', 'low'
   String? _errorMessage;
+  String? _currentLyrics;
+  bool _isLoadingLyrics = false;
   int _playRequestId = 0;
 
   Song? get currentSong => _currentSong;
@@ -33,39 +41,49 @@ class PlayerStateNotifier extends ChangeNotifier {
   Duration get duration => _duration;
   bool get isShuffle => _isShuffle;
   RepeatMode get repeatMode => _repeatMode;
+  String get audioQuality => _audioQuality;
   String? get errorMessage => _errorMessage;
-  AudioPlayer get audioPlayer => _audioPlayer;
+  String? get currentLyrics => _currentLyrics;
+  bool get isLoadingLyrics => _isLoadingLyrics;
+  AudioPlayer get audioPlayer => _player;
 
   PlayerStateNotifier() {
     _initListeners();
+    _bindGlobalHandlerCallbacks();
+  }
+
+  void _bindGlobalHandlerCallbacks() {
+    if (globalAudioHandler != null) {
+      globalAudioHandler!.onSkipToNextCallback = next;
+      globalAudioHandler!.onSkipToPreviousCallback = previous;
+      globalAudioHandler!.onPlayCallback = resume;
+      globalAudioHandler!.onPauseCallback = pause;
+      globalAudioHandler!.onSeekCallback = seek;
+    }
   }
 
   void _initListeners() {
-    _audioPlayer.positionStream.listen((pos) {
+    _player.positionStream.listen((pos) {
       _position = pos;
       notifyListeners();
     });
 
-    _audioPlayer.durationStream.listen((dur) {
+    _player.durationStream.listen((dur) {
       if (dur != null) {
         _duration = dur;
         notifyListeners();
       }
     });
 
-    _audioPlayer.playerStateStream.listen((state) {
-      final isPlaying = state.playing;
+    _player.playerStateStream.listen((state) {
+      final playing = state.playing;
       final processingState = state.processingState;
 
       if (processingState == ProcessingState.completed) {
-        if (_duration.inSeconds > 0 && _position.inSeconds >= _duration.inSeconds - 5) {
-          next();
-        } else {
-          _status = PlayerLoadingStatus.paused;
-        }
-      } else if (isPlaying) {
+        _handleTrackCompletion();
+      } else if (playing) {
         _status = PlayerLoadingStatus.playing;
-      } else if (processingState == ProcessingState.ready && !isPlaying) {
+      } else if (processingState == ProcessingState.ready && !playing) {
         _status = PlayerLoadingStatus.paused;
       } else if (processingState == ProcessingState.idle) {
         _status = PlayerLoadingStatus.idle;
@@ -73,12 +91,23 @@ class PlayerStateNotifier extends ChangeNotifier {
       notifyListeners();
     });
 
-    _audioPlayer.playbackEventStream.listen(
+    _player.playbackEventStream.listen(
       (event) {},
       onError: (Object e, StackTrace st) {
-        print("AudioPlayer playbackEvent error: $e");
+        print("AudioPlayer playbackEvent notice: $e");
       },
     );
+  }
+
+  void setAudioQuality(String quality) {
+    if (quality.contains('320') || quality.toLowerCase().contains('tinggi')) {
+      _audioQuality = 'high';
+    } else if (quality.contains('160') || quality.toLowerCase().contains('sedang')) {
+      _audioQuality = 'medium';
+    } else {
+      _audioQuality = 'low';
+    }
+    notifyListeners();
   }
 
   void toggleShuffle() {
@@ -97,12 +126,21 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Musify-style Full-Length Playback Engine with Non-blocking Timeout Guards
+  void _handleTrackCompletion() {
+    if (_repeatMode == RepeatMode.one && _currentSong != null) {
+      seek(Duration.zero);
+      resume();
+    } else {
+      next();
+    }
+  }
+
+  /// Musify-style Ultra-Fast Direct Playback Engine
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 1. Queue Management
+    // 1. Queue Configuration
     if (targetQueue != null && targetQueue.isNotEmpty) {
       _queue = List.from(targetQueue);
       _currentIndex = index ?? _queue.indexWhere((s) => s.id == song.id);
@@ -118,9 +156,11 @@ class PlayerStateNotifier extends ChangeNotifier {
       _currentSong = _queue[_currentIndex];
     }
 
-    // 2. Update MediaSession metadata immediately for Android notification
-    if (globalAudioHandler is MyAudioHandler && _currentSong != null) {
-      (globalAudioHandler as MyAudioHandler).setMediaItem(
+    _bindGlobalHandlerCallbacks();
+
+    // 2. Set MediaNotification metadata immediately
+    if (globalAudioHandler != null && _currentSong != null) {
+      globalAudioHandler!.setMediaItem(
         id: _currentSong!.id,
         title: _currentSong!.title,
         artist: _currentSong!.artist,
@@ -130,68 +170,92 @@ class PlayerStateNotifier extends ChangeNotifier {
       );
     }
 
-    // 3. Instant UI feedback
+    // 3. UI Status Update
     _status = PlayerLoadingStatus.loading;
     _position = Duration.zero;
     _duration = Duration(seconds: _currentSong!.durationSeconds);
     _errorMessage = null;
+    _currentLyrics = null;
     notifyListeners();
 
-    // 4. Trigger background pre-fetching for adjacent tracks
+    // 4. Save to Recent History
+    _recordRecentSong(_currentSong!);
+
+    // 5. Pre-fetch next track in background (Musify 0-delay feature)
     if (_queue.length > 1) {
       final int nextIndex = (_currentIndex + 1) % _queue.length;
-      final int prevIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
-      YoutubeAudioExtractor.preFetchStreamUrl(_queue[nextIndex]);
-      YoutubeAudioExtractor.preFetchStreamUrl(_queue[prevIndex]);
+      YoutubeAudioExtractor.preFetchStreamUrl(_queue[nextIndex], quality: _audioQuality);
     }
 
+    // 6. Fetch Lyrics in background
+    _loadLyricsAsync(_currentSong!);
+
     try {
-      // 5. Asynchronously extract FULL-LENGTH YouTube stream URL (allow up to 6 seconds)
-      String? streamUrl;
-      try {
-        streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!).timeout(const Duration(seconds: 6));
-      } catch (e) {
-        print("YouTube extraction notice: $e");
-      }
+      // 7. Extract Stream URL
+      final streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!, quality: _audioQuality)
+          .timeout(const Duration(seconds: 7));
 
       if (_playRequestId != currentRequestId) return;
 
       if (streamUrl == null || streamUrl.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal memutar lagu '${_currentSong!.title}'. Coba lagu lain.";
+        _errorMessage = "Gagal memutar '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
         return;
       }
 
-      // 6. Set URL with 4s timeout guard & play immediately so UI never freezes
+      // 8. Set URL & Play
       try {
-        await _audioPlayer.setUrl(streamUrl).timeout(const Duration(seconds: 4));
+        await _player.setUrl(streamUrl).timeout(const Duration(seconds: 5));
       } catch (setUrlErr) {
-        print("setUrl guard notice: $setUrlErr");
+        print("setUrl notice: $setUrlErr");
       }
 
       if (_playRequestId != currentRequestId) return;
 
-      await _audioPlayer.play();
+      await _player.play();
       _status = PlayerLoadingStatus.playing;
       notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
-      print("Full Playback error for ${_currentSong?.title}: $e");
+      print("Playback error: $e");
       _status = PlayerLoadingStatus.error;
-      _errorMessage = "Gagal memutar lagu full. Periksa koneksi internet Anda.";
+      _errorMessage = "Gagal memuat stream audio. Periksa koneksi internet.";
       notifyListeners();
     }
   }
 
+  void _recordRecentSong(Song song) async {
+    try {
+      final recent = await _storageService.getRecent();
+      recent.removeWhere((s) => s.id == song.id);
+      recent.insert(0, song);
+      if (recent.length > 50) recent.removeLast();
+      await _storageService.saveRecent(recent);
+    } catch (_) {}
+  }
+
+  void _loadLyricsAsync(Song song) async {
+    _isLoadingLyrics = true;
+    notifyListeners();
+    try {
+      final lyrics = await _musicService.getSongLyrics(song.title, song.artist);
+      if (_currentSong?.id == song.id) {
+        _currentLyrics = lyrics;
+      }
+    } catch (_) {}
+    _isLoadingLyrics = false;
+    notifyListeners();
+  }
+
   Future<void> pause() async {
-    await _audioPlayer.pause();
+    await _player.pause();
     _status = PlayerLoadingStatus.paused;
     notifyListeners();
   }
 
   Future<void> resume() async {
-    await _audioPlayer.play();
+    await _player.play();
     _status = PlayerLoadingStatus.playing;
     notifyListeners();
   }
@@ -207,13 +271,13 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> stop() async {
-    await _audioPlayer.stop();
+    await _player.stop();
     _status = PlayerLoadingStatus.idle;
     notifyListeners();
   }
 
   Future<void> seek(Duration position) async {
-    await _audioPlayer.seek(position);
+    await _player.seek(position);
     _position = position;
     notifyListeners();
   }
@@ -240,7 +304,7 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
-    _audioPlayer.dispose();
+    _localPlayer.dispose();
     super.dispose();
   }
 }

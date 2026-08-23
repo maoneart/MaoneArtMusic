@@ -1,14 +1,13 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 
 class _CachedStream {
-  final String url;
+  final List<String> urls;
   final DateTime timestamp;
-  _CachedStream(this.url, this.timestamp);
+  _CachedStream(this.urls, this.timestamp);
 
-  bool get isExpired => DateTime.now().difference(timestamp).inHours > 4;
+  bool get isExpired => DateTime.now().difference(timestamp).inHours > 3;
 }
 
 class YoutubeAudioExtractor {
@@ -19,7 +18,7 @@ class YoutubeAudioExtractor {
     _streamCache.clear();
   }
 
-  /// Selects audio stream based on quality preferences (Musify approach)
+  /// Selects audio stream based on quality preferences
   static AudioStreamInfo _selectAudioQuality(List<AudioStreamInfo> sources, String quality) {
     if (sources.isEmpty) throw Exception("No audio sources found");
     final sorted = sources.sortByBitrate();
@@ -37,37 +36,39 @@ class YoutubeAudioExtractor {
     }
   }
 
-  /// Asynchronously pre-fetch stream URL for a song in background (0ms next song playback)
+  /// Asynchronously pre-fetch stream URLs for next track in background
   static void preFetchStreamUrl(Song song, {String quality = 'high'}) {
     final cacheKey = '${song.id}_$quality';
     if (_streamCache.containsKey(cacheKey) && !_streamCache[cacheKey]!.isExpired) return;
-    getAudioStreamUrl(song, quality: quality).then((_) {}).catchError((_) {});
+    getAudioStreamCandidateUrls(song, quality: quality).then((_) {}).catchError((_) {});
   }
 
-  /// Extract audio stream URL for a song using direct Musify stream engine
-  static Future<String?> getAudioStreamUrl(Song song, {String quality = 'high'}) async {
+  /// Returns candidate audio stream URLs in priority order for robust failover
+  static Future<List<String>> getAudioStreamCandidateUrls(Song song, {String quality = 'high'}) async {
     final cacheKey = '${song.id}_$quality';
 
     // 1. Check in-memory cache
     if (_streamCache.containsKey(cacheKey)) {
       final cached = _streamCache[cacheKey]!;
-      if (!cached.isExpired) {
-        return cached.url;
+      if (!cached.isExpired && cached.urls.isNotEmpty) {
+        return cached.urls;
       }
     }
 
+    final List<String> candidateUrls = [];
     final String? directVideoId = song.youtubeId;
 
-    // 2. Direct Video ID extraction (Musify standard)
+    // 2. Direct Video ID Manifest Extraction
     if (directVideoId != null && directVideoId.isNotEmpty) {
       if (song.isLive) {
         try {
           final liveUrl = await _yt.videos.streamsClient
               .getHttpLiveStreamUrl(VideoId(directVideoId))
-              .timeout(const Duration(seconds: 6));
+              .timeout(const Duration(seconds: 8));
           if (liveUrl.isNotEmpty) {
-            _streamCache[cacheKey] = _CachedStream(liveUrl, DateTime.now());
-            return liveUrl;
+            candidateUrls.add(liveUrl);
+            _streamCache[cacheKey] = _CachedStream(candidateUrls, DateTime.now());
+            return candidateUrls;
           }
         } catch (e) {
           print('Live stream extraction notice: $e');
@@ -77,43 +78,66 @@ class YoutubeAudioExtractor {
       try {
         final manifest = await _yt.videos.streamsClient
             .getManifest(directVideoId)
-            .timeout(const Duration(seconds: 6));
+            .timeout(const Duration(seconds: 8));
 
         if (manifest.audioOnly.isNotEmpty) {
-          final selectedStream = _selectAudioQuality(manifest.audioOnly.toList(), quality);
-          final url = selectedStream.url.toString();
-          _streamCache[cacheKey] = _CachedStream(url, DateTime.now());
-          return url;
-        } else if (manifest.muxed.isNotEmpty) {
-          final url = manifest.muxed.withHighestBitrate().url.toString();
-          _streamCache[cacheKey] = _CachedStream(url, DateTime.now());
-          return url;
+          // Primary selected stream
+          try {
+            final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
+            candidateUrls.add(primary.url.toString());
+          } catch (_) {}
+
+          // Add remaining audio streams as failovers
+          final sortedAudio = manifest.audioOnly.sortByBitrate();
+          for (final a in sortedAudio) {
+            final urlStr = a.url.toString();
+            if (!candidateUrls.contains(urlStr)) {
+              candidateUrls.add(urlStr);
+            }
+          }
+        }
+
+        // Add muxed video streams as extra fallback
+        if (manifest.muxed.isNotEmpty) {
+          final muxedSorted = manifest.muxed.sortByBitrate();
+          for (final m in muxedSorted) {
+            final urlStr = m.url.toString();
+            if (!candidateUrls.contains(urlStr)) {
+              candidateUrls.add(urlStr);
+            }
+          }
+        }
+
+        if (candidateUrls.isNotEmpty) {
+          _streamCache[cacheKey] = _CachedStream(candidateUrls, DateTime.now());
+          return candidateUrls;
         }
       } catch (e) {
         print('Direct video ID extraction notice for $directVideoId: $e');
       }
     }
 
-    // 3. YouTube Explode Search Extraction with Compilation Video Filtering
+    // 3. YouTube Explode Search Fallback
     try {
       final String searchQuery = '${song.title} ${song.artist}'
           .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
           .trim();
+
       List<Video> videoList = [];
       try {
-        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 5));
+        final searchResults = await _yt.search.search(searchQuery).timeout(const Duration(seconds: 6));
         videoList = searchResults.whereType<Video>().toList();
       } catch (_) {}
 
       if (videoList.isEmpty) {
         try {
-          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 5));
+          final fallbackResults = await _yt.search.search(song.title).timeout(const Duration(seconds: 6));
           videoList.addAll(fallbackResults.whereType<Video>());
         } catch (_) {}
       }
 
       if (videoList.isNotEmpty) {
-        // Strict Filter: EXCLUDE compilation/mix videos (>10 mins, <45s, or titles with "full album", "kompilasi", "2 jam", "nonstop")
+        // Filter out very long compilation loops
         final candidates = List<Video>.from(
           videoList.where((v) {
             final seconds = v.duration?.inSeconds ?? 0;
@@ -127,43 +151,29 @@ class YoutubeAudioExtractor {
               return false;
             }
             return true;
-          }).take(5),
+          }).take(4),
         );
 
         if (candidates.isEmpty) {
-          candidates.addAll(videoList.where((v) => (v.duration?.inSeconds ?? 0) <= 600).take(3));
+          candidates.addAll(videoList.where((v) => (v.duration?.inSeconds ?? 0) <= 600).take(2));
         }
 
-        candidates.sort((a, b) {
-          final aTopic = a.author.toLowerCase().contains('- topic') ||
-              a.title.toLowerCase().contains('audio') ||
-              a.title.toLowerCase().contains('official');
-          final bTopic = b.author.toLowerCase().contains('- topic') ||
-              b.title.toLowerCase().contains('audio') ||
-              b.title.toLowerCase().contains('official');
-          if (aTopic && !bTopic) return -1;
-          if (!aTopic && bTopic) return 1;
-          return 0;
-        });
-
-        for (final selectedVideo in candidates) {
+        for (final video in candidates) {
           try {
-            final videoId = selectedVideo.id.value;
             final manifest = await _yt.videos.streamsClient
-                .getManifest(videoId)
-                .timeout(const Duration(seconds: 5));
+                .getManifest(video.id.value)
+                .timeout(const Duration(seconds: 6));
 
-            String? selectedUrl;
             if (manifest.audioOnly.isNotEmpty) {
-              final stream = _selectAudioQuality(manifest.audioOnly.toList(), quality);
-              selectedUrl = stream.url.toString();
+              final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
+              candidateUrls.add(primary.url.toString());
             } else if (manifest.muxed.isNotEmpty) {
-              selectedUrl = manifest.muxed.withHighestBitrate().url.toString();
+              candidateUrls.add(manifest.muxed.withHighestBitrate().url.toString());
             }
 
-            if (selectedUrl != null && selectedUrl.isNotEmpty) {
-              _streamCache[cacheKey] = _CachedStream(selectedUrl, DateTime.now());
-              return selectedUrl;
+            if (candidateUrls.isNotEmpty) {
+              _streamCache[cacheKey] = _CachedStream(candidateUrls, DateTime.now());
+              return candidateUrls;
             }
           } catch (_) {
             continue;
@@ -171,53 +181,15 @@ class YoutubeAudioExtractor {
         }
       }
     } catch (e) {
-      print('YouTube full stream search notice for ${song.title}: $e');
+      print('Search fallback notice for ${song.title}: $e');
     }
 
-    // 4. Invidious REST API fallback for Full-Length Audio Stream
-    try {
-      final String searchQuery = '${song.title} ${song.artist}'
-          .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
-          .trim();
-      final invidiousInstances = [
-        'https://inv.tux.pizza',
-        'https://invidious.nerdvpn.de',
-        'https://yewtu.be',
-      ];
+    return candidateUrls;
+  }
 
-      for (final instance in invidiousInstances) {
-        try {
-          final searchRes = await http
-              .get(Uri.parse('$instance/api/v1/search?q=${Uri.encodeComponent(searchQuery)}&type=video'))
-              .timeout(const Duration(seconds: 4));
-          if (searchRes.statusCode == 200) {
-            final List results = json.decode(searchRes.body);
-            final filtered = results.where((item) {
-              final sec = item['lengthSeconds']?.toInt() ?? 0;
-              return sec >= 45 && sec <= 600;
-            }).toList();
-
-            if (filtered.isNotEmpty) {
-              final videoId = filtered.first['videoId'];
-              final videoRes = await http
-                  .get(Uri.parse('$instance/api/v1/videos/$videoId'))
-                  .timeout(const Duration(seconds: 4));
-              if (videoRes.statusCode == 200) {
-                final data = json.decode(videoRes.body);
-                final List adaptive = data['adaptiveFormats'] ?? [];
-                final audioStreams = adaptive.where((s) => s['type'].toString().contains('audio/')).toList();
-                if (audioStreams.isNotEmpty) {
-                  final fullUrl = audioStreams.first['url'].toString();
-                  _streamCache[cacheKey] = _CachedStream(fullUrl, DateTime.now());
-                  return fullUrl;
-                }
-              }
-            }
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    return null;
+  /// Convenience method to get top audio stream URL
+  static Future<String?> getAudioStreamUrl(Song song, {String quality = 'high'}) async {
+    final urls = await getAudioStreamCandidateUrls(song, quality: quality);
+    return urls.isNotEmpty ? urls.first : null;
   }
 }

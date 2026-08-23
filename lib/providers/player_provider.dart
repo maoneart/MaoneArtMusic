@@ -81,6 +81,8 @@ class PlayerStateNotifier extends ChangeNotifier {
 
       if (processingState == ProcessingState.completed) {
         _handleTrackCompletion();
+      } else if (processingState == ProcessingState.buffering || processingState == ProcessingState.loading) {
+        _status = PlayerLoadingStatus.loading;
       } else if (playing) {
         _status = PlayerLoadingStatus.playing;
       } else if (processingState == ProcessingState.ready && !playing) {
@@ -191,27 +193,58 @@ class PlayerStateNotifier extends ChangeNotifier {
     _loadLyricsAsync(_currentSong!);
 
     try {
-      // 7. Extract Stream URL
-      final streamUrl = await YoutubeAudioExtractor.getAudioStreamUrl(_currentSong!, quality: _audioQuality)
-          .timeout(const Duration(seconds: 7));
+      // 7. Extract Stream Candidate URLs
+      final candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(_currentSong!, quality: _audioQuality)
+          .timeout(const Duration(seconds: 12));
 
       if (_playRequestId != currentRequestId) return;
 
-      if (streamUrl == null || streamUrl.isEmpty) {
+      if (candidateUrls.isEmpty) {
         _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal memutar '${_currentSong!.title}'. Coba lagu lain.";
+        _errorMessage = "Gagal menemukan stream '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
         return;
       }
 
-      // 8. Set URL & Play
-      try {
-        await _player.setUrl(streamUrl).timeout(const Duration(seconds: 5));
-      } catch (setUrlErr) {
-        print("setUrl notice: $setUrlErr");
+      // 8. Attempt playback with fallback across candidate URLs
+      bool sourceSet = false;
+      for (final streamUrl in candidateUrls) {
+        if (_playRequestId != currentRequestId) return;
+        try {
+          final audioSource = AudioSource.uri(
+            Uri.parse(streamUrl),
+            headers: const {
+              'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+              'Referer': 'https://www.youtube.com/',
+              'Origin': 'https://www.youtube.com',
+            },
+            tag: MediaItem(
+              id: _currentSong!.id,
+              title: _currentSong!.title,
+              artist: _currentSong!.artist,
+              album: _currentSong!.album,
+              artUri: Uri.tryParse(_currentSong!.artworkUrl),
+              duration: Duration(seconds: _currentSong!.durationSeconds),
+            ),
+          );
+
+          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 10));
+          sourceSet = true;
+          break;
+        } catch (sourceErr) {
+          print("AudioSource load notice for candidate URL: $sourceErr");
+          continue;
+        }
       }
 
       if (_playRequestId != currentRequestId) return;
+
+      if (!sourceSet) {
+        _status = PlayerLoadingStatus.error;
+        _errorMessage = "Gagal memuat format audio untuk '${_currentSong!.title}'.";
+        notifyListeners();
+        return;
+      }
 
       await _player.play();
       _status = PlayerLoadingStatus.playing;
@@ -220,7 +253,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       if (_playRequestId != currentRequestId) return;
       print("Playback error: $e");
       _status = PlayerLoadingStatus.error;
-      _errorMessage = "Gagal memuat stream audio. Periksa koneksi internet.";
+      _errorMessage = "Gagal memutar audio. Periksa koneksi internet.";
       notifyListeners();
     }
   }

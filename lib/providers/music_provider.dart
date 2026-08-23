@@ -67,6 +67,9 @@ class MusicStateNotifier extends ChangeNotifier {
       return;
     }
 
+    _isSearching = true;
+    notifyListeners();
+
     // 1. Fetch autocomplete suggestions instantly
     _musicService.getSearchSuggestions(query).then((sug) {
       if (_currentQuery == query) {
@@ -75,8 +78,8 @@ class MusicStateNotifier extends ChangeNotifier {
       }
     });
 
-    // 2. Debounce full search by 300ms to allow typing smoothly
-    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+    // 2. Debounce full search by 250ms
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
       search(query);
     });
   }

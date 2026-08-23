@@ -8,6 +8,7 @@ import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/seek_bar.dart';
 import '../widgets/app_artwork.dart';
+import '../widgets/playlist_picker_modal.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -120,7 +121,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Song Title & Artist Info Box
+                  // Song Title & Artist Info Box with Star/Playlist & Favorite
                   GlassContainer(
                     borderRadius: 20,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -154,6 +155,34 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                             ],
                           ),
                         ),
+
+                        // Add to Playlist (Star Button)
+                        IconButton(
+                          icon: const Icon(Icons.star_rounded, color: Colors.amberAccent, size: 28),
+                          tooltip: "Tambahkan ke Playlist",
+                          onPressed: () {
+                            PlaylistPickerModal.show(context, ref, song);
+                          },
+                        ),
+
+                        // Favorite Heart Button
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final isFav = ref.watch(libraryProvider).isFavorite(song);
+                            return IconButton(
+                              icon: Icon(
+                                isFav ? Icons.favorite : Icons.favorite_border,
+                                color: isFav ? Colors.redAccent : Colors.white70,
+                                size: 26,
+                              ),
+                              tooltip: isFav ? "Hapus dari Favorit" : "Tambah ke Favorit",
+                              onPressed: () {
+                                ref.read(libraryProvider).toggleFavorite(song);
+                              },
+                            );
+                          },
+                        ),
+
                         if (playerState.errorMessage != null)
                           IconButton(
                             icon: const Icon(Icons.refresh, color: Colors.amberAccent),

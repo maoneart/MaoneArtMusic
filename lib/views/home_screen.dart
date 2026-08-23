@@ -5,6 +5,7 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/song_tile.dart';
+import '../widgets/playlist_picker_modal.dart';
 import 'search_screen.dart';
 import 'player_screen.dart';
 
@@ -376,6 +377,9 @@ class HomeScreen extends ConsumerWidget {
                         isFavorite: isFav,
                         onFavoriteTap: () {
                           ref.read(libraryProvider).toggleFavorite(song);
+                        },
+                        onPlaylistTap: () {
+                          PlaylistPickerModal.show(context, ref, song);
                         },
                         onTap: () {
                           ref.read(playerProvider).playSong(

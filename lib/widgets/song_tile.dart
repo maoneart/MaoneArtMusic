@@ -11,6 +11,7 @@ class SongTile extends StatelessWidget {
   final bool isFavorite;
   final VoidCallback onTap;
   final VoidCallback? onFavoriteTap;
+  final VoidCallback? onPlaylistTap;
   final VoidCallback? onMoreTap;
 
   const SongTile({
@@ -21,6 +22,7 @@ class SongTile extends StatelessWidget {
     this.isFavorite = false,
     required this.onTap,
     this.onFavoriteTap,
+    this.onPlaylistTap,
     this.onMoreTap,
   }) : super(key: key);
 
@@ -142,6 +144,17 @@ class SongTile extends StatelessWidget {
                 ],
               ),
             ),
+
+            if (onPlaylistTap != null)
+              IconButton(
+                icon: const Icon(
+                  Icons.star_border_rounded,
+                  color: Colors.amberAccent,
+                  size: 22,
+                ),
+                tooltip: "Tambah ke Playlist",
+                onPressed: onPlaylistTap,
+              ),
 
             if (onFavoriteTap != null)
               IconButton(

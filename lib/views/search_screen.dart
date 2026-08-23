@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/music_provider.dart';
 import '../providers/player_provider.dart';
+import '../providers/library_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/song_tile.dart';
+import '../widgets/playlist_picker_modal.dart';
 import 'player_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -197,9 +199,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                             final song = musicState.searchResults[index];
                             final isPlaying = playerState.currentSong?.id == song.id;
 
+                            final isFav = ref.watch(libraryProvider).isFavorite(song);
+
                             return SongTile(
                               song: song,
                               isPlaying: isPlaying,
+                              isFavorite: isFav,
+                              onFavoriteTap: () {
+                                ref.read(libraryProvider).toggleFavorite(song);
+                              },
+                              onPlaylistTap: () {
+                                PlaylistPickerModal.show(context, ref, song);
+                              },
                               onTap: () {
                                 FocusScope.of(context).unfocus();
                                 ref.read(playerProvider).playSong(

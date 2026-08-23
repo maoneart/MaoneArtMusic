@@ -7,6 +7,7 @@ import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
 import '../widgets/song_tile.dart';
+import '../widgets/playlist_picker_modal.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
   final Playlist playlist;
@@ -143,9 +144,18 @@ class PlaylistDetailScreen extends ConsumerWidget {
                         final song = currentPlaylist.songs[index];
                         final isPlaying = playerState.currentSong?.id == song.id;
 
+                        final isFav = libraryState.isFavorite(song);
+
                         return SongTile(
                           song: song,
                           isPlaying: isPlaying,
+                          isFavorite: isFav,
+                          onFavoriteTap: () {
+                            ref.read(libraryProvider).toggleFavorite(song);
+                          },
+                          onPlaylistTap: () {
+                            PlaylistPickerModal.show(context, ref, song);
+                          },
                           onTap: () {
                             ref.read(playerProvider).playSong(
                                   song,

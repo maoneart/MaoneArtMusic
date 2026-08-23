@@ -33,8 +33,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       );
     }
 
-    final isFav = ref.read(libraryProvider).isFavorite(song);
-
     return Scaffold(
       extendBodyBehindAppBar: true,
       appBar: AppBar(
@@ -71,15 +69,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 _showQueue = !_showQueue;
                 _showLyrics = false;
               });
-            },
-          ),
-          IconButton(
-            icon: Icon(
-              isFav ? Icons.favorite : Icons.favorite_border,
-              color: isFav ? Colors.redAccent : Colors.white,
-            ),
-            onPressed: () {
-              ref.read(libraryProvider).toggleFavorite(song);
             },
           ),
         ],

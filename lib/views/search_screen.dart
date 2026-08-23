@@ -34,6 +34,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
   void _triggerSearch(String query) {
     _searchController.text = query;
+    _searchController.selection = TextSelection.fromPosition(
+      TextPosition(offset: query.length),
+    );
     ref.read(musicProvider).search(query);
   }
 
@@ -59,7 +62,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         Navigator.of(context).pop();
                       } else {
                         _searchController.clear();
-                        ref.read(musicProvider).search('');
+                        ref.read(musicProvider).clearSearch();
                       }
                     },
                   ),
@@ -71,6 +74,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       child: TextField(
                         controller: _searchController,
                         autofocus: false,
+                        textInputAction: TextInputAction.search,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: "Cari lagu, artis, atau band...",

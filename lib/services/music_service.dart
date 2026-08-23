@@ -70,7 +70,107 @@ class MusicService {
     );
   }
 
-  /// Search songs using Musify's YouTube search engine
+  /// Direct YouTube Search Engine (Fast, 100% Real-Time Official YouTube Results)
+  Future<List<Song>> _searchDirectYouTube(String cleanQuery, {int limit = 30}) async {
+    final List<Song> songList = [];
+    final Set<String> seenIds = {};
+
+    try {
+      final uri = Uri.parse(
+        'https://www.youtube.com/results?search_query=${Uri.encodeComponent(cleanQuery)}',
+      );
+      final res = await http.get(uri, headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      }).timeout(const Duration(seconds: 5));
+
+      if (res.statusCode == 200) {
+        final html = res.body;
+        if (html.contains('var ytInitialData =')) {
+          final start = html.indexOf('var ytInitialData =') + 'var ytInitialData ='.length;
+          final end = html.indexOf(';</script>', start);
+          if (end != -1) {
+            final jsonStr = html.substring(start, end).trim();
+            final data = json.decode(jsonStr);
+
+            final contents = data['contents']?['twoColumnSearchResultsRenderer']?['primaryContents']?['sectionListRenderer']?['contents'] as List? ?? [];
+
+            int index = 0;
+            for (final sec in contents) {
+              final itemSection = sec['itemSectionRenderer']?['contents'] as List? ?? [];
+              for (final item in itemSection) {
+                final v = item['videoRenderer'];
+                if (v != null) {
+                  final vid = v['videoId'] as String?;
+                  final rawTitle = v['title']?['runs']?[0]?['text'] as String? ?? '';
+                  final rawOwner = v['ownerText']?['runs']?[0]?['text'] as String? ?? '';
+                  final lenText = v['lengthText']?['simpleText'] as String? ?? '';
+                  final thumbnails = v['thumbnail']?['thumbnails'] as List? ?? [];
+                  final thumb = thumbnails.isNotEmpty
+                      ? (thumbnails.last['url'] as String? ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg')
+                      : 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
+
+                  if (vid == null || vid.isEmpty || rawTitle.isEmpty) continue;
+
+                  final seconds = _parseDuration(lenText);
+                  final titleLower = rawTitle.toLowerCase();
+
+                  // Skip long compilations > 20 mins unless requested
+                  if (seconds > 1200 || (seconds > 0 && seconds < 20)) continue;
+                  if (titleLower.contains('full album') ||
+                      titleLower.contains('kompilasi') ||
+                      titleLower.contains('nonstop') ||
+                      titleLower.contains('2 jam') ||
+                      titleLower.contains('1 jam')) {
+                    continue;
+                  }
+
+                  if (seenIds.add(vid)) {
+                    final sep = rawTitle.indexOf(' - ');
+                    final artist = sep != -1 ? rawTitle.substring(0, sep).trim() : rawOwner;
+                    final titlePart = sep != -1 ? rawTitle.substring(sep + 3).trim() : rawTitle;
+                    final formattedTitle = formatSongTitle(titlePart);
+
+                    songList.add(Song(
+                      id: 'yt_$vid',
+                      youtubeId: vid,
+                      title: formattedTitle.isNotEmpty ? formattedTitle : rawTitle,
+                      artist: artist.isNotEmpty ? artist : rawOwner,
+                      album: 'YouTube Music',
+                      artworkUrl: thumb,
+                      durationSeconds: seconds,
+                      isLive: lenText.toLowerCase().contains('live'),
+                    ));
+
+                    if (songList.length >= limit) return songList;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Direct YouTube search notice: $e');
+    }
+
+    return songList;
+  }
+
+  static int _parseDuration(String lenText) {
+    if (lenText.isEmpty) return 0;
+    final parts = lenText.replaceAll('.', ':').split(':');
+    try {
+      if (parts.length == 2) {
+        return (int.parse(parts[0]) * 60) + int.parse(parts[1]);
+      } else if (parts.length == 3) {
+        return (int.parse(parts[0]) * 3600) + (int.parse(parts[1]) * 60) + int.parse(parts[2]);
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Search songs using Musify's YouTube search engine with Direct Fast fallback
   Future<List<Song>> searchSongs(String query, {int limit = 30}) async {
     final cleanQuery = query.trim();
     if (cleanQuery.isEmpty) return [];
@@ -90,18 +190,25 @@ class MusicService {
       return await getSongsFromPlaylist(playlistId, limit: limit);
     }
 
+    // 1. Direct High-Speed YouTube Search Engine (Official YouTube Web/App identical results)
+    final directResults = await _searchDirectYouTube(cleanQuery, limit: limit);
+    if (directResults.isNotEmpty) {
+      return directResults;
+    }
+
+    // 2. Fallback to youtube_explode_dart
     final List<Song> songList = [];
     final Set<String> seenIds = {};
 
     try {
-      final searchResults = await _yt.search.search(cleanQuery).timeout(const Duration(seconds: 7));
+      final searchResults = await _yt.search.search(cleanQuery).timeout(const Duration(seconds: 6));
       int index = 0;
       for (final video in searchResults.whereType<Video>()) {
         final seconds = video.duration?.inSeconds ?? 0;
         final titleLower = video.title.toLowerCase();
 
         // Skip compilation/1-hour loops
-        if (seconds > 720 || (seconds > 0 && seconds < 30)) continue;
+        if (seconds > 1200 || (seconds > 0 && seconds < 20)) continue;
         if (titleLower.contains('full album') ||
             titleLower.contains('kompilasi') ||
             titleLower.contains('nonstop') ||
@@ -116,7 +223,7 @@ class MusicService {
         }
       }
     } catch (e) {
-      print('Search error: $e');
+      print('Explode search fallback notice: $e');
     }
 
     return songList;

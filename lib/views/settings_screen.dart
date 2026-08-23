@@ -5,6 +5,7 @@ import '../services/youtube_audio_extractor.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
+import 'about_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -121,87 +122,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
-              const SizedBox(height: 24),
-
-              // About Developer & App Card
-              const Text(
-                "Tentang Aplikasi",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
               const SizedBox(height: 12),
+
+              // Tentang Aplikasi Tile (Opens Full-Page AboutScreen)
               GlassContainer(
-                borderRadius: 20,
-                padding: const EdgeInsets.all(20),
-                child: Column(
+                borderRadius: 16,
+                padding: const EdgeInsets.all(16),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (context) => const AboutScreen()),
+                  );
+                },
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // PP Bulat Developer
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [
-                            MaoneArtTheme.spotifyGreenBright,
-                            MaoneArtTheme.primaryCyan,
-                            MaoneArtTheme.primaryPurple,
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, color: MaoneArtTheme.primaryCyan),
+                        SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Tentang Aplikasi",
+                              style: TextStyle(fontSize: 16, color: Colors.white, fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              "Profil Developer & Info Sistem",
+                              style: TextStyle(fontSize: 12, color: Colors.white54),
+                            ),
                           ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.3),
-                            blurRadius: 16,
-                            spreadRadius: 2,
-                          ),
-                        ],
-                      ),
-                      child: const CircleAvatar(
-                        radius: 44,
-                        backgroundColor: Color(0xFF141927),
-                        backgroundImage: AssetImage('assets/images/pp.jpg'),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      "Hermawan",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    const Text(
-                      "Developer & Creator",
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: MaoneArtTheme.spotifyGreenBright,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(color: Colors.white12, height: 1),
-                    const SizedBox(height: 16),
-
-                    // App Info Rows
-                    _buildInfoRow(Icons.apps_rounded, "Nama Aplikasi", "MaoneArt Music"),
-                    const SizedBox(height: 10),
-                    _buildInfoRow(Icons.verified_rounded, "Versi Aplikasi", "v1.0.0 (Release 2026)"),
-                    const SizedBox(height: 10),
-                    _buildInfoRow(Icons.code_rounded, "Bahasa Program", "Flutter & Dart (Google)"),
-                    const SizedBox(height: 10),
-                    _buildInfoRow(Icons.headphones_rounded, "Audio Engine", "ExoPlayer & YouTube Music"),
-
-                    const SizedBox(height: 16),
-                    Text(
-                      "© 2026 Hermawan • MaoneArt. All rights reserved.",
-                      style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.4)),
-                    ),
+                    Icon(Icons.chevron_right, color: Colors.white54),
                   ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // App Version Footer
+              Center(
+                child: Text(
+                  "MaoneArt Music v1.0.0 • by Hermawan",
+                  style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35)),
                 ),
               ),
               const SizedBox(height: 140),
@@ -209,24 +175,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: MaoneArtTheme.primaryCyan),
-        const SizedBox(width: 10),
-        Text(
-          label,
-          style: TextStyle(fontSize: 13, color: Colors.white.withOpacity(0.6)),
-        ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-        ),
-      ],
     );
   }
 }

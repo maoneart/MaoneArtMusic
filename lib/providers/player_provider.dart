@@ -216,12 +216,10 @@ class PlayerStateNotifier extends ChangeNotifier {
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
         try {
-          final audioSource = LockCachingAudioSource(
+          final audioSource = AudioSource.uri(
             Uri.parse(streamUrl),
             headers: const {
               'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-              'Referer': 'https://www.youtube.com/',
-              'Origin': 'https://www.youtube.com',
             },
             tag: MediaItem(
               id: _currentSong!.id,
@@ -233,10 +231,8 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // Concurrently trigger play() so audio outputs instantly upon first chunk
-          final loadFuture = _player.setAudioSource(audioSource, preload: true);
+          await _player.setAudioSource(audioSource);
           _player.play();
-          await loadFuture.timeout(const Duration(seconds: 8));
           sourceSet = true;
           break;
         } catch (sourceErr) {

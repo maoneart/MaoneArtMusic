@@ -210,10 +210,33 @@ class MusicService {
         songs = await searchSongs('Viral TikTok Indonesia FYP 2026 Hits Terbaru', limit: 30);
       }
     } else {
-      // Default: Top Trending 2026 Mix
-      songs = await getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 25);
+      // Default: Top 20 Trending (10 Lagu Teratas Indonesia + 10 Lagu Teratas Barat/Global)
+      try {
+        final results = await Future.wait([
+          getSongsFromPlaylist('PL4fGSI1pDJn59m2b4J_l8oJqM8V4Gz7j9', limit: 10),
+          getSongsFromPlaylist('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', limit: 10),
+        ]);
+
+        final List<Song> indoList = results[0];
+        final List<Song> globalList = results[1];
+
+        final Set<String> seenIds = {};
+        for (final s in indoList) {
+          if (seenIds.add(s.id)) songs.add(s);
+        }
+        for (final s in globalList) {
+          if (seenIds.add(s.id)) songs.add(s);
+        }
+      } catch (_) {}
+
       if (songs.length < 10) {
-        songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 30);
+        final backup = await searchSongs('Top Hits 2026 Indonesia Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 20);
+        for (final s in backup) {
+          if (!songs.any((x) => x.id == s.id)) {
+            songs.add(s);
+            if (songs.length >= 20) break;
+          }
+        }
       }
     }
 

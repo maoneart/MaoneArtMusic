@@ -238,11 +238,11 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "Top 50 Global",
-                        subtitle: "Hits dunia paling viral",
-                        categoryKey: "Global",
-                        gradientColors: [const Color(0xFF1E3264), const Color(0xFF0F172A)],
-                        icon: Icons.public,
+                        title: "Top 20 Trending",
+                        subtitle: "10 Indo + 10 Barat Teratas",
+                        categoryKey: "Trending",
+                        gradientColors: [const Color(0xFF134E5E), const Color(0xFF71B280)],
+                        icon: Icons.whatshot,
                       ),
                       const SizedBox(width: 12),
                       _buildChartCard(
@@ -253,6 +253,16 @@ class HomeScreen extends ConsumerWidget {
                         categoryKey: "Indonesia",
                         gradientColors: [const Color(0xFF8D0B41), const Color(0xFF1E0A24)],
                         icon: Icons.flag,
+                      ),
+                      const SizedBox(width: 12),
+                      _buildChartCard(
+                        ref,
+                        musicState,
+                        title: "Top 50 Barat",
+                        subtitle: "Hits dunia paling viral",
+                        categoryKey: "Global",
+                        gradientColors: [const Color(0xFF1E3264), const Color(0xFF0F172A)],
+                        icon: Icons.public,
                       ),
                       const SizedBox(width: 12),
                       _buildChartCard(

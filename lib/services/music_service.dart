@@ -167,99 +167,119 @@ class MusicService {
     }
   }
 
-  /// Parallel fetch songs from multiple query seeds to build a rich 50-track list with direct YouTube IDs
-  Future<List<Song>> _fetchSongsFromQueries(List<String> queries, {int limit = 50}) async {
-    final List<Song> allSongs = [];
-    final Set<String> seenIds = {};
-
+  /// Fetch real-time YouTube search suggestions (as user types)
+  Future<List<String>> getSearchSuggestions(String query) async {
+    final clean = query.trim();
+    if (clean.isEmpty) return [];
     try {
-      final results = await Future.wait(
-        queries.map((q) => searchSongs(q, limit: 12)),
+      final uri = Uri.parse(
+        'https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${Uri.encodeComponent(clean)}',
       );
-
-      for (final songBatch in results) {
-        for (final song in songBatch) {
-          if (seenIds.add(song.id)) {
-            allSongs.add(song);
-            if (allSongs.length >= limit) break;
-          }
+      final res = await http.get(uri).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data is List && data.length > 1 && data[1] is List) {
+          return List<String>.from(data[1].take(6));
         }
-        if (allSongs.length >= limit) break;
       }
-    } catch (e) {
-      print('Batch query fetch notice: $e');
-    }
-
-    return allSongs;
+    } catch (_) {}
+    return [];
   }
 
-  /// Fetch real-time Trending / Top Charts (Guaranteed 50 Full Songs with Direct YouTube Audio IDs)
+  /// Parallel fetch exactly 1 distinct top song per seed query to guarantee 10 distinct hit tracks
+  Future<List<Song>> _fetchTopDistinctSongs(List<String> seeds, {int limit = 10}) async {
+    try {
+      final results = await Future.wait(
+        seeds.take(limit).map((seed) async {
+          final list = await searchSongs(seed, limit: 1);
+          return list.isNotEmpty ? list.first : null;
+        }),
+      );
+
+      final List<Song> distinctSongs = [];
+      final Set<String> seenIds = {};
+
+      for (final song in results) {
+        if (song != null && seenIds.add(song.id)) {
+          distinctSongs.add(song);
+        }
+      }
+      return distinctSongs;
+    } catch (e) {
+      print('Distinct fetch notice: $e');
+      return [];
+    }
+  }
+
+  /// Fetch real-time Top 10 Charts (10 Distinct, Unique Top Hit Songs with Direct YouTube Audio IDs)
   Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
     List<Song> songs = [];
 
-    final List<String> indoQueries = [
-      'Bernadya Official Music Video',
-      'Sal Priadi Gala Bunga Matahari Official',
-      'Mahalini Mati Matian Official',
-      'Juicy Luicy Lampu Kuning Sialan',
-      'Nadhif Basalamah Penjaga Hati Official',
-      'Tiara Andini Kupu Kupu Official',
-      'Denny Caknan Sigar Wirang Official',
-      'Hindia Kita Ke Sana Evaluasi',
-      'Yura Yunita Risalah Hati Official',
-      'Anggi Marito Kisah Yang Salah',
-      'Rizky Febian Bermuara Official',
-      'Ghea Indrawari Jiwa Yang Bersedih',
-    ];
-
-    final List<String> globalQueries = [
+    final List<String> trendingSeeds = [
+      'Bernadya Satu Bulan Official Music Video',
       'Rose Bruno Mars APT Official Music Video',
-      'Lady Gaga Bruno Mars Die With A Smile Official',
+      'Sal Priadi Gala Bunga Matahari Official Music Video',
+      'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
+      'Mahalini Mati Matian Official Music Video',
       'Billie Eilish Birds of a Feather Official Video',
-      'Sabrina Carpenter Espresso Taste Please Please Please Official',
-      'Chappell Roan Good Luck Babe Official',
-      'Benson Boone Beautiful Things Official Video',
-      'Post Malone Morgan Wallen I Had Some Help Official',
-      'Taylor Swift Fortnight Official Music Video',
-      'The Weeknd Playboi Carti Timeless Official',
-      'Dua Lipa Houdini Training Season Official',
-      'Kendrick Lamar Not Like Us Official',
-      'Teddy Swims Lose Control Official',
+      'Juicy Luicy Lampu Kuning Official Music Video',
+      'Sabrina Carpenter Espresso Official Music Video',
+      'Nadhif Basalamah Penjaga Hati Official Music Video',
+      'Tiara Andini Kupu Kupu Official Music Video',
     ];
 
-    final List<String> tiktokQueries = [
-      'Viral TikTok FYP 2026 Indonesia Hits',
-      'Lagu TikTok Viral 2026 Terbaru Enak Didengar',
-      'Sound TikTok Viral 2026 Paling Candu',
-      'Lagu Jedag Jedug TikTok Viral 2026 Terpopuler',
-      'Trending TikTok Musik Indonesia 2026',
-      'DJ TikTok Viral Full Bass 2026 Terbaru',
+    final List<String> indoSeeds = [
+      'Bernadya Satu Bulan Official Music Video',
+      'Sal Priadi Gala Bunga Matahari Official Music Video',
+      'Mahalini Mati Matian Official Music Video',
+      'Juicy Luicy Lampu Kuning Official Music Video',
+      'Nadhif Basalamah Penjaga Hati Official Music Video',
+      'Tiara Andini Kupu Kupu Official Music Video',
+      'Denny Caknan Sigar Official Music Video',
+      'Hindia Kita Ke Sana Official Video',
+      'Yura Yunita Risalah Hati Official Video',
+      'Anggi Marito Kisah Yang Salah Official Video',
+    ];
+
+    final List<String> globalSeeds = [
+      'Rose Bruno Mars APT Official Music Video',
+      'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
+      'Billie Eilish Birds of a Feather Official Video',
+      'Sabrina Carpenter Espresso Official Music Video',
+      'Chappell Roan Good Luck Babe Official Video',
+      'Benson Boone Beautiful Things Official Video',
+      'Post Malone Morgan Wallen I Had Some Help Official Video',
+      'Taylor Swift Fortnight Official Music Video',
+      'The Weeknd Playboi Carti Timeless Official Video',
+      'Dua Lipa Houdini Official Music Video',
+    ];
+
+    final List<String> tiktokSeeds = [
+      'Raim Laode Lesung Pipi Official Video',
+      'Juicy Luicy Adrian Khalif Sialan Official Video',
+      'Ghea Indrawari Jiwa Yang Bersedih Official Music Video',
+      'Idgitaf Satu Satu Official Music Video',
+      'Nadhif Basalamah Penjaga Hati Official Music Video',
+      'Denny Caknan Wirang Official Music Video',
+      'Salma Salsabil Boleh Juga Official Music Video',
+      'Feby Putri Fiersa Besari Runtuh Official Video',
+      'Nadin Amizah Semua Aku Dirayakan Official Video',
+      'Batubara Bunga Maaf Official Video',
     ];
 
     if (category == 'Indonesia') {
-      songs = await _fetchSongsFromQueries(indoQueries, limit: 50);
+      songs = await _fetchTopDistinctSongs(indoSeeds, limit: 10);
     } else if (category == 'Global') {
-      songs = await _fetchSongsFromQueries(globalQueries, limit: 50);
+      songs = await _fetchTopDistinctSongs(globalSeeds, limit: 10);
     } else if (category == 'Viral TikTok') {
-      songs = await _fetchSongsFromQueries(tiktokQueries, limit: 50);
+      songs = await _fetchTopDistinctSongs(tiktokSeeds, limit: 10);
     } else {
-      // Default: Top 50 Trending (25 Top Indonesia + 25 Top Global)
-      final results = await Future.wait([
-        _fetchSongsFromQueries(indoQueries, limit: 25),
-        _fetchSongsFromQueries(globalQueries, limit: 25),
-      ]);
-
-      final Set<String> seenIds = {};
-      for (final s in results[0]) {
-        if (seenIds.add(s.id)) songs.add(s);
-      }
-      for (final s in results[1]) {
-        if (seenIds.add(s.id)) songs.add(s);
-      }
+      // Default: Top 10 Trending Mix
+      songs = await _fetchTopDistinctSongs(trendingSeeds, limit: 10);
     }
 
     if (songs.isEmpty) {
-      songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 50);
+      songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 10);
     }
 
     return songs;

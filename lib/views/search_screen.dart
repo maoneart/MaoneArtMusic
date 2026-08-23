@@ -73,7 +73,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         autofocus: false,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
-                          hintText: "Cari lagu, artis, atau album...",
+                          hintText: "Cari lagu, artis, atau band...",
                           hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
                           border: InputBorder.none,
                           suffixIcon: _searchController.text.isNotEmpty
@@ -81,13 +81,17 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                   icon: const Icon(Icons.clear, color: Colors.white70),
                                   onPressed: () {
                                     _searchController.clear();
-                                    ref.read(musicProvider).search('');
+                                    ref.read(musicProvider).clearSearch();
                                   },
                                 )
                               : null,
                         ),
                         onChanged: (val) {
-                          ref.read(musicProvider).search(val);
+                          ref.read(musicProvider).onSearchQueryChanged(val);
+                        },
+                        onSubmitted: (val) {
+                          FocusScope.of(context).unfocus();
+                          _triggerSearch(val);
                         },
                       ),
                     ),
@@ -96,6 +100,37 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               ),
             ),
 
+            // Live Autocomplete Suggestions (As user types)
+            if (musicState.suggestions.isNotEmpty && _searchController.text.isNotEmpty)
+              Container(
+                height: 42,
+                margin: const EdgeInsets.only(bottom: 8),
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: musicState.suggestions.length,
+                  itemBuilder: (context, index) {
+                    final sug = musicState.suggestions[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ActionChip(
+                        avatar: const Icon(Icons.search, size: 16, color: MaoneArtTheme.spotifyGreenBright),
+                        backgroundColor: MaoneArtTheme.bgDark.withOpacity(0.8),
+                        side: BorderSide(color: MaoneArtTheme.spotifyGreen.withOpacity(0.4)),
+                        label: Text(
+                          sug,
+                          style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          _triggerSearch(sug);
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+
             // Quick Category Pills
             if (_searchController.text.isEmpty) ...[
               const Padding(
@@ -103,7 +138,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    "Jelajahi Genre",
+                    "Jelajahi Genre Populer",
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,

@@ -238,8 +238,8 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "Top 50 Trending",
-                        subtitle: "25 Indo + 25 Barat Teratas",
+                        title: "Top 10 Trending",
+                        subtitle: "Hits Terpopuler 2026",
                         categoryKey: "Trending",
                         gradientColors: [const Color(0xFF134E5E), const Color(0xFF71B280)],
                         icon: Icons.whatshot,
@@ -248,8 +248,8 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "Top 50 Indonesia",
-                        subtitle: "Lagu terpopuler di Indonesia",
+                        title: "Top 10 Indonesia",
+                        subtitle: "Lagu Teratas Indonesia",
                         categoryKey: "Indonesia",
                         gradientColors: [const Color(0xFF8D0B41), const Color(0xFF1E0A24)],
                         icon: Icons.flag,
@@ -258,8 +258,8 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "Top 50 Barat",
-                        subtitle: "Hits dunia paling viral",
+                        title: "Top 10 Barat",
+                        subtitle: "Hits Dunia Paling Viral",
                         categoryKey: "Global",
                         gradientColors: [const Color(0xFF1E3264), const Color(0xFF0F172A)],
                         icon: Icons.public,
@@ -268,8 +268,8 @@ class HomeScreen extends ConsumerWidget {
                       _buildChartCard(
                         ref,
                         musicState,
-                        title: "TikTok Viral 50",
-                        subtitle: "Musik paling ngetren di TikTok",
+                        title: "TikTok Viral 10",
+                        subtitle: "Musik FYP Paling Candu",
                         categoryKey: "Viral TikTok",
                         gradientColors: [const Color(0xFF005F73), const Color(0xFF0A9396)],
                         icon: Icons.music_note,

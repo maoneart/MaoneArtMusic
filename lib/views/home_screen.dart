@@ -26,7 +26,7 @@ class HomeScreen extends ConsumerWidget {
           onRefresh: () => ref.read(musicProvider).fetchTrending(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 110),
+            padding: const EdgeInsets.only(bottom: 150),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

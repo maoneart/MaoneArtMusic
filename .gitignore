@@ -37,8 +37,3 @@ symbols.zip
 
 # Obfuscation mapping files
 mapping.txt
-
-# GitHub Workflows local ignore
-.github/
-
-

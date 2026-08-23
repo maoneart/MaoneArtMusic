@@ -157,7 +157,7 @@ class HomeScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          "Top 100 Charts & Viral Hits",
+                          "Top 10 Charts & Viral Hits",
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w900,

@@ -537,20 +537,64 @@ class MusicService {
     return songs;
   }
 
-  /// Fetch lyrics from LRCLIB API
+  /// Fetch lyrics from LRCLIB API with multi-tier cascade fallback
   Future<String?> getSongLyrics(String title, String artist) async {
+    final cleanTitle = formatSongTitle(title);
+    final cleanArtist = artist.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
+
+    // 1. Exact LRCLIB match
     try {
-      final cleanTitle = formatSongTitle(title);
-      final cleanArtist = artist.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
       final uri = Uri.parse(
         'https://lrclib.net/api/get?artist_name=${Uri.encodeComponent(cleanArtist)}&track_name=${Uri.encodeComponent(cleanTitle)}',
       );
       final res = await http.get(uri).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        return data['syncedLyrics'] ?? data['plainLyrics'];
+        final synced = data['syncedLyrics'];
+        if (synced != null && synced.toString().isNotEmpty) return synced;
+        final plain = data['plainLyrics'];
+        if (plain != null && plain.toString().isNotEmpty) return plain;
       }
     } catch (_) {}
+
+    // 2. LRCLIB query search
+    try {
+      final queryUri = Uri.parse(
+        'https://lrclib.net/api/search?q=${Uri.encodeComponent('$cleanTitle $cleanArtist')}',
+      );
+      final res = await http.get(queryUri).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data is List && data.isNotEmpty) {
+          for (final item in data) {
+            final synced = item['syncedLyrics'];
+            if (synced != null && synced.toString().isNotEmpty) return synced;
+          }
+          final plain = data[0]['plainLyrics'];
+          if (plain != null && plain.toString().isNotEmpty) return plain;
+        }
+      }
+    } catch (_) {}
+
+    // 3. LRCLIB title only search
+    try {
+      final titleUri = Uri.parse(
+        'https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}',
+      );
+      final res = await http.get(titleUri).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data is List && data.isNotEmpty) {
+          for (final item in data) {
+            final synced = item['syncedLyrics'];
+            if (synced != null && synced.toString().isNotEmpty) return synced;
+          }
+          final plain = data[0]['plainLyrics'];
+          if (plain != null && plain.toString().isNotEmpty) return plain;
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 }

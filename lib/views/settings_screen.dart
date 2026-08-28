@@ -2,8 +2,10 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/player_provider.dart';
+import '../providers/library_provider.dart';
 import '../services/storage_service.dart';
 import '../services/youtube_audio_extractor.dart';
+import '../services/audio_cache_service.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
@@ -18,6 +20,35 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _audioQuality = 'Tinggi (320kbps)';
+  String _cacheSizeText = 'Memuat...';
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshCacheSize();
+  }
+
+  Future<void> _refreshCacheSize() async {
+    try {
+      final bytes = await AudioCacheService.instance.getTotalCacheSizeBytes();
+      final mb = bytes / (1024 * 1024);
+      if (mounted) {
+        setState(() {
+          if (mb < 1.0) {
+            _cacheSizeText = '${(bytes / 1024).toStringAsFixed(1)} KB';
+          } else {
+            _cacheSizeText = '${mb.toStringAsFixed(1)} MB / 500 MB Max';
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _cacheSizeText = '0 MB / 500 MB Max';
+        });
+      }
+    }
+  }
 
   void _showAudioQualityModal() {
     final qualities = [
@@ -209,7 +240,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                "Preferensi sistem & audio streaming",
+                "Preferensi sistem, lirik & auto-cache offline",
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.white.withOpacity(0.6),
@@ -259,10 +290,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
 
               _SettingTile(
-                icon: Icons.headphones_rounded,
+                icon: Icons.lyrics_rounded,
+                iconColor: MaoneArtTheme.primaryPurple,
+                title: "Lirik Sinkron Real-time",
+                subtitle: "Auto-scroll otomatis & pencarian multi-source",
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: MaoneArtTheme.primaryPurple.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: MaoneArtTheme.primaryPurple.withOpacity(0.3),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: const Text(
+                    "Aktif",
+                    style: TextStyle(
+                      color: MaoneArtTheme.primaryPurple,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              _SettingTile(
+                icon: Icons.flash_on_rounded,
                 iconColor: MaoneArtTheme.accentGreen,
-                title: "Engine Pemutar",
-                subtitle: "ExoPlayer & YouTube InnerTube Stream",
+                title: "Smart Auto-Cache (0s Delay)",
+                subtitle: "Otomatis menyimpan lagu yang diputar ke HP",
                 trailing: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
@@ -274,7 +331,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                   ),
                   child: const Text(
-                    "Lossless HQ",
+                    "Maks 500 MB",
                     style: TextStyle(
                       color: MaoneArtTheme.accentGreen,
                       fontSize: 11,
@@ -288,15 +345,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               _buildSectionHeader("PENYIMPANAN & DATA"),
 
               _SettingTile(
+                icon: Icons.pie_chart_rounded,
+                iconColor: MaoneArtTheme.primaryCyan,
+                title: "Penyimpanan Offline & Cache",
+                subtitle: "Ukuran file lagu di memori internal HP",
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _cacheSizeText,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
+              _SettingTile(
                 icon: Icons.cleaning_services_rounded,
                 iconColor: Colors.amberAccent,
-                title: "Bersihkan Cache Audio",
-                subtitle: "Hapus temporary stream & cache memory",
+                title: "Bersihkan Auto-Cache Audio",
+                subtitle: "Hapus temporary cache (Lagu download manual aman)",
                 onTap: () async {
                   final confirm = await MaoneArtGlassModal.showConfirmModal(
                     context: context,
-                    title: "Bersihkan Cache Audio?",
-                    message: "Ini akan menghapus seluruh file cache memory audio stream dan metadata.",
+                    title: "Bersihkan Auto-Cache?",
+                    message: "Ini akan membersihkan temporary file auto-cache. Lagu yang Anda simpan/download manual TIDAK akan dihapus.",
                     confirmText: "Bersihkan",
                     cancelText: "Batal",
                     icon: Icons.cleaning_services_outlined,
@@ -305,13 +384,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                   if (confirm == true && mounted) {
                     YoutubeAudioExtractor.clearCache();
-                    await MaoneArtGlassModal.showAlertModal(
-                      context: context,
-                      title: "Cache Dibersihkan",
-                      message: "Seluruh cache temporary audio berhasil dibersihkan.",
-                      icon: Icons.check_circle_outline,
-                      iconColor: MaoneArtTheme.accentGreen,
-                    );
+                    await AudioCacheService.instance.clearAutoCacheOnly();
+                    await _refreshCacheSize();
+                    ref.read(libraryProvider).loadLibrary();
+
+                    if (mounted) {
+                      await MaoneArtGlassModal.showAlertModal(
+                        context: context,
+                        title: "Auto-Cache Dibersihkan",
+                        message: "Temporary cache audio berhasil dikosongkan.",
+                        icon: Icons.check_circle_outline,
+                        iconColor: MaoneArtTheme.accentGreen,
+                      );
+                    }
                   }
                 },
                 trailing: Container(
@@ -346,13 +431,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
                   if (confirm == true && mounted) {
                     await StorageService().saveRecent([]);
-                    await MaoneArtGlassModal.showAlertModal(
-                      context: context,
-                      title: "Riwayat Direset",
-                      message: "Riwayat putar musik berhasil dikosongkan.",
-                      icon: Icons.check_circle_outline,
-                      iconColor: MaoneArtTheme.accentGreen,
-                    );
+                    if (mounted) {
+                      await MaoneArtGlassModal.showAlertModal(
+                        context: context,
+                        title: "Riwayat Direset",
+                        message: "Riwayat putar musik berhasil dikosongkan.",
+                        icon: Icons.check_circle_outline,
+                        iconColor: MaoneArtTheme.accentGreen,
+                      );
+                    }
                   }
                 },
                 trailing: Container(

@@ -23,7 +23,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -187,15 +187,16 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               ),
             ),
 
-            // Tab Bar
+            // Tab Bar with 3 Tabs
             TabBar(
               controller: _tabController,
               indicatorColor: MaoneArtTheme.primaryCyan,
               labelColor: MaoneArtTheme.primaryCyan,
               unselectedLabelColor: Colors.white60,
               tabs: const [
-                Tab(text: "Favorit Saya"),
+                Tab(text: "Favorit"),
                 Tab(text: "Playlist"),
+                Tab(text: "💾 Offline"),
               ],
             ),
 
@@ -204,7 +205,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Favorites View
+                  // Tab 1: Favorites View
                   libraryState.favorites.isEmpty
                       ? Center(
                           child: Text(
@@ -254,7 +255,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                           },
                         ),
 
-                  // Playlists View
+                  // Tab 2: Playlists View
                   libraryState.playlists.isEmpty
                       ? Center(
                           child: Column(
@@ -341,6 +342,69 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                                   ],
                                 ),
                               ),
+                            );
+                          },
+                        ),
+
+                  // Tab 3: Lagu Offline (💾) View (0s Delay Playback)
+                  libraryState.offlineSongs.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.offline_pin_outlined, size: 64, color: Colors.white.withOpacity(0.2)),
+                              const SizedBox(height: 12),
+                              Text(
+                                "Belum ada lagu tersimpan di memori HP.",
+                                style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Lagu yang diputar atau diunduh akan otomatis\ntersimpan di sini untuk putar instan tanpa delay.",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.only(bottom: 160, top: 12),
+                          itemCount: libraryState.offlineSongs.length,
+                          itemBuilder: (context, index) {
+                            final song = libraryState.offlineSongs[index];
+                            final isPlaying = playerState.currentSong?.id == song.id;
+
+                            return SongTile(
+                              song: song,
+                              isPlaying: isPlaying,
+                              isFavorite: libraryState.isFavorite(song),
+                              onFavoriteTap: () {
+                                ref.read(libraryProvider).toggleFavorite(song);
+                              },
+                              onPlaylistTap: () {
+                                PlaylistPickerModal.show(context, ref, song);
+                              },
+                              onTap: () {
+                                ref.read(playerProvider).playSong(
+                                      song,
+                                      newQueue: libraryState.offlineSongs,
+                                      index: index,
+                                    );
+                              },
+                              onMoreTap: () async {
+                                final confirm = await MaoneArtGlassModal.showConfirmModal(
+                                  context: context,
+                                  title: "Hapus Lagu Offline?",
+                                  message: "Apakah Anda ingin menghapus '${song.title}' dari memori HP?",
+                                  confirmText: "Hapus",
+                                  cancelText: "Batal",
+                                  icon: Icons.delete_outline,
+                                  iconColor: Colors.redAccent,
+                                );
+                                if (confirm == true) {
+                                  await ref.read(libraryProvider).deleteOfflineSong(song);
+                                }
+                              },
                             );
                           },
                         ),

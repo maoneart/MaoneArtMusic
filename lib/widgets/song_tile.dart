@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
+import '../providers/library_provider.dart';
 import '../theme/maoneart_theme.dart';
 import 'glass_container.dart';
 import 'app_artwork.dart';
 
-class SongTile extends StatelessWidget {
+class SongTile extends ConsumerWidget {
   final Song song;
   final bool isPlaying;
   final int? rank;
@@ -40,7 +42,9 @@ class SongTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isOffline = ref.watch(libraryProvider).isOffline(song);
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
       child: GlassContainer(
@@ -99,6 +103,14 @@ class SongTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      if (isOffline) ...[
+                        const Icon(
+                          Icons.offline_pin_rounded,
+                          color: MaoneArtTheme.spotifyGreenBright,
+                          size: 15,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
                       Expanded(
                         child: Text(
                           song.title,

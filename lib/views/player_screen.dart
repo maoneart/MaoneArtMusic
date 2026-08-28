@@ -9,6 +9,7 @@ import '../widgets/glass_container.dart';
 import '../widgets/seek_bar.dart';
 import '../widgets/app_artwork.dart';
 import '../widgets/playlist_picker_modal.dart';
+import '../widgets/synced_lyrics_view.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -40,9 +41,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          "SEDANG DIPUTAR",
-          style: TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.bold),
+        title: Column(
+          children: [
+            const Text(
+              "SEDANG DIPUTAR",
+              style: TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.bold),
+            ),
+            if (playerState.isPlayingOffline)
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                decoration: BoxDecoration(
+                  color: MaoneArtTheme.spotifyGreen.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.5), width: 0.8),
+                ),
+                child: const Text(
+                  "⚡ OFFLINE (0s DELAY)",
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: MaoneArtTheme.spotifyGreenBright),
+                ),
+              ),
+          ],
         ),
         actions: [
           IconButton(
@@ -110,7 +129,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
                   const SizedBox(height: 12),
 
-                  // Song Title & Artist Info Box with Star/Playlist & Favorite
+                  // Song Title & Artist Info Box with Star/Playlist, Offline Download & Favorite
                   GlassContainer(
                     borderRadius: 20,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -143,6 +162,39 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                               ),
                             ],
                           ),
+                        ),
+
+                        // Offline Download Button
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final isOff = ref.watch(libraryProvider).isOffline(song);
+                            return IconButton(
+                              icon: Icon(
+                                isOff ? Icons.offline_pin_rounded : Icons.download_for_offline_outlined,
+                                color: isOff ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
+                                size: 26,
+                              ),
+                              tooltip: isOff ? "Tersimpan Offline (0s Delay)" : "Simpan Lagu Offline",
+                              onPressed: () async {
+                                final res = await ref.read(libraryProvider).toggleDownloadSong(song);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      backgroundColor: const Color(0xFF141927),
+                                      behavior: SnackBarBehavior.floating,
+                                      content: Text(
+                                        res
+                                            ? "💾 '${song.title}' berhasil disimpan offline (0s Delay)"
+                                            : "🗑️ '${song.title}' dihapus dari offline",
+                                        style: const TextStyle(color: Colors.white),
+                                      ),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                            );
+                          },
                         ),
 
                         // Add to Playlist (Star Button)
@@ -305,16 +357,34 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Widget _buildLyricsView(PlayerStateNotifier playerState) {
     return GlassContainer(
       borderRadius: 24,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                "Lirik Lagu",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: MaoneArtTheme.primaryCyan),
+              Row(
+                children: [
+                  const Text(
+                    "Lirik Lagu",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: MaoneArtTheme.primaryCyan),
+                  ),
+                  if (playerState.isSyncedLyrics) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: MaoneArtTheme.primaryCyan.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        "SINKRON OTOMATIS",
+                        style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: MaoneArtTheme.primaryCyan),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: Colors.white70, size: 20),
@@ -324,26 +394,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           ),
           const Divider(color: Colors.white24),
           Expanded(
-            child: playerState.isLoadingLyrics
-                ? const Center(child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan))
-                : playerState.currentLyrics != null && playerState.currentLyrics!.isNotEmpty
-                    ? SingleChildScrollView(
-                        child: Text(
-                          playerState.currentLyrics!,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.8,
-                            color: Colors.white,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      )
-                    : const Center(
-                        child: Text(
-                          "Lirik tidak tersedia untuk lagu ini.",
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                      ),
+            child: SyncedLyricsView(
+              lyrics: playerState.parsedLyrics,
+              plainLyrics: playerState.plainLyrics ?? playerState.currentLyrics,
+              currentPosition: playerState.position,
+              onSeek: (pos) => ref.read(playerProvider).seek(pos),
+              isLoading: playerState.isLoadingLyrics,
+            ),
           ),
         ],
       ),

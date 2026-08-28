@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
 import '../models/song.dart';
+import '../models/lyric_line.dart';
 import '../services/youtube_audio_extractor.dart';
 import '../services/audio_handler.dart';
 import '../services/storage_service.dart';
 import '../services/music_service.dart';
+import '../services/audio_cache_service.dart';
 
 enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 enum MusicRepeatMode { off, all, one }
@@ -30,7 +33,10 @@ class PlayerStateNotifier extends ChangeNotifier {
   String _audioQuality = 'high'; // 'high', 'medium', 'low'
   String? _errorMessage;
   String? _currentLyrics;
+  List<LyricLine> _parsedLyrics = [];
+  String? _plainLyrics;
   bool _isLoadingLyrics = false;
+  bool _isPlayingOffline = false;
   int _playRequestId = 0;
 
   Song? get currentSong => _currentSong;
@@ -45,7 +51,11 @@ class PlayerStateNotifier extends ChangeNotifier {
   String get audioQuality => _audioQuality;
   String? get errorMessage => _errorMessage;
   String? get currentLyrics => _currentLyrics;
+  List<LyricLine> get parsedLyrics => _parsedLyrics;
+  String? get plainLyrics => _plainLyrics;
+  bool get isSyncedLyrics => _parsedLyrics.isNotEmpty;
   bool get isLoadingLyrics => _isLoadingLyrics;
+  bool get isPlayingOffline => _isPlayingOffline;
   AudioPlayer get audioPlayer => _player;
 
   PlayerStateNotifier() {
@@ -138,7 +148,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
   }
 
-  /// Musify-style Ultra-Fast Direct Playback Engine
+  /// Musify-style Ultra-Fast Direct Playback Engine with 0ms Offline Cache Support
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
@@ -179,12 +189,15 @@ class PlayerStateNotifier extends ChangeNotifier {
     _duration = Duration(seconds: _currentSong!.durationSeconds);
     _errorMessage = null;
     _currentLyrics = null;
+    _parsedLyrics = [];
+    _plainLyrics = null;
+    _isPlayingOffline = false;
     notifyListeners();
 
     // 4. Save to Recent History
     _recordRecentSong(_currentSong!);
 
-    // 5. Pre-fetch next tracks in background (0ms delay for subsequent tracks)
+    // 5. Pre-fetch next tracks in background
     if (_queue.length > 1) {
       final int nextIndex = (_currentIndex + 1) % _queue.length;
       YoutubeAudioExtractor.preFetchStreamUrl(_queue[nextIndex], quality: _audioQuality);
@@ -197,8 +210,37 @@ class PlayerStateNotifier extends ChangeNotifier {
     // 6. Fetch Lyrics asynchronously in background
     _loadLyricsAsync(_currentSong!);
 
+    // ⚡ 7. Check Offline Audio Cache First (0ms Instant Playback!)
     try {
-      // 7. Extract Stream Candidate URLs
+      final localPath = await AudioCacheService.instance.getLocalAudioPath(_currentSong!);
+      if (localPath != null && await File(localPath).exists()) {
+        final audioSource = AudioSource.file(
+          localPath,
+          tag: MediaItem(
+            id: _currentSong!.id,
+            title: _currentSong!.title,
+            artist: _currentSong!.artist,
+            album: _currentSong!.album,
+            artUri: Uri.tryParse(_currentSong!.artworkUrl),
+            duration: Duration(seconds: _currentSong!.durationSeconds),
+          ),
+        );
+
+        if (_playRequestId != currentRequestId) return;
+
+        await _player.setAudioSource(audioSource);
+        _player.play();
+        _status = PlayerLoadingStatus.playing;
+        _isPlayingOffline = true;
+        notifyListeners();
+        return;
+      }
+    } catch (cacheErr) {
+      print("Offline cache check notice: $cacheErr");
+    }
+
+    try {
+      // 8. Extract Stream Candidate URLs for Online Streaming
       final candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(_currentSong!, quality: _audioQuality)
           .timeout(const Duration(seconds: 10));
 
@@ -211,7 +253,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 8. Low-Latency Instant Playback with Failover
+      // 9. Low-Latency Streaming Playback with Failover + Auto-Cache in Background
       bool sourceSet = false;
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
@@ -234,6 +276,9 @@ class PlayerStateNotifier extends ChangeNotifier {
           await _player.setAudioSource(audioSource);
           _player.play();
           sourceSet = true;
+
+          // 🔥 Otomatis simpan ke cache lokal di background untuk pemutaran 0ms berikutnya
+          AudioCacheService.instance.autoCacheStreamInBackground(_currentSong!, streamUrl);
           break;
         } catch (sourceErr) {
           print("AudioSource load notice for candidate URL: $sourceErr");
@@ -251,6 +296,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
 
       _status = PlayerLoadingStatus.playing;
+      _isPlayingOffline = false;
       notifyListeners();
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
@@ -273,11 +319,21 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   void _loadLyricsAsync(Song song) async {
     _isLoadingLyrics = true;
+    _parsedLyrics = [];
+    _plainLyrics = null;
     notifyListeners();
     try {
       final lyrics = await _musicService.getSongLyrics(song.title, song.artist);
-      if (_currentSong?.id == song.id) {
+      if (_currentSong?.id == song.id && lyrics != null && lyrics.trim().isNotEmpty) {
         _currentLyrics = lyrics;
+        if (lyrics.contains('[') && lyrics.contains(']')) {
+          _parsedLyrics = LyricLine.parseLrc(lyrics);
+          if (_parsedLyrics.isEmpty) {
+            _plainLyrics = lyrics;
+          }
+        } else {
+          _plainLyrics = lyrics;
+        }
       }
     } catch (_) {}
     _isLoadingLyrics = false;

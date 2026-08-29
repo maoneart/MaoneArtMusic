@@ -34,7 +34,8 @@ class LyricLine {
         }
 
         final totalMs = (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
-        final text = (match.group(4) ?? '').trim();
+        final rawText = (match.group(4) ?? '').trim();
+        final text = rawText.replaceAll(RegExp(r'\[\d+:\d+(?:[.:]\d+)?\]'), '').trim();
 
         if (text.isNotEmpty) {
           lines.add(LyricLine(

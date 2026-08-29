@@ -59,13 +59,7 @@ class AppArtwork extends StatelessWidget {
             child: Icon(placeholderIcon, color: Colors.white54, size: iconSize * 0.8),
           ),
         ),
-        errorWidget: (context, url, error) => Image.network(
-          artworkUrl,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _buildFallback(context),
-        ),
+        errorWidget: (context, url, error) => _buildFallback(context),
       ),
     );
   }

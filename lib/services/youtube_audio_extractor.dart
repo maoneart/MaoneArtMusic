@@ -24,14 +24,14 @@ class YoutubeAudioExtractor {
     final sorted = sources.sortByBitrate();
 
     if (quality == 'low') {
-      return sorted.last;
+      return sorted.first;
     } else if (quality == 'medium') {
       return sorted[sorted.length ~/ 2];
     } else {
       // High / default: Prefer AAC/M4A (tag 140) or highest bitrate
       return sorted.firstWhere(
         (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
-        orElse: () => sorted.withHighestBitrate(),
+        orElse: () => sorted.last,
       );
     }
   }

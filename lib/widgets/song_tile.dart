@@ -159,10 +159,13 @@ class SongTile extends ConsumerWidget {
 
             if (onPlaylistTap != null)
               IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.all(4),
                 icon: const Icon(
                   Icons.star_border_rounded,
                   color: Colors.amberAccent,
-                  size: 22,
+                  size: 20,
                 ),
                 tooltip: "Tambah ke Playlist",
                 onPressed: onPlaylistTap,
@@ -170,22 +173,31 @@ class SongTile extends ConsumerWidget {
 
             if (onFavoriteTap != null)
               IconButton(
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                padding: const EdgeInsets.all(4),
                 icon: Icon(
                   isFavorite ? Icons.favorite : Icons.favorite_border,
                   color: isFavorite ? Colors.redAccent : Colors.white54,
-                  size: 20,
+                  size: 19,
                 ),
                 onPressed: onFavoriteTap,
               ),
 
-            Text(
-              _formatDuration(song.durationSeconds),
-              style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.5)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+              child: Text(
+                _formatDuration(song.durationSeconds),
+                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+              ),
             ),
 
             if (onMoreTap != null)
               IconButton(
-                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 20),
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
+                padding: const EdgeInsets.all(2),
+                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 18),
                 onPressed: onMoreTap,
               ),
           ],

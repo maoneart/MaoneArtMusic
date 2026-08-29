@@ -49,12 +49,14 @@ class Playlist {
 
   factory Playlist.fromMap(Map<String, dynamic> map) {
     return Playlist(
-      id: map['id'] ?? '',
-      name: map['name'] ?? 'Untitled Playlist',
-      description: map['description'] ?? '',
-      artworkUrl: map['artworkUrl'],
-      songs: List<Song>.from(map['songs']?.map((x) => Song.fromMap(x)) ?? []),
-      createdAt: map['createdAt'] != null ? DateTime.parse(map['createdAt']) : DateTime.now(),
+      id: map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? 'Untitled Playlist',
+      description: map['description']?.toString() ?? '',
+      artworkUrl: map['artworkUrl']?.toString(),
+      songs: List<Song>.from(
+        (map['songs'] as List?)?.map((x) => Song.fromMap(Map<String, dynamic>.from(x))) ?? [],
+      ),
+      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
     );
   }
 

@@ -169,10 +169,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                           builder: (context, ref, _) {
                             final isOff = ref.watch(libraryProvider).isOffline(song);
                             return IconButton(
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              padding: const EdgeInsets.all(4),
                               icon: Icon(
                                 isOff ? Icons.offline_pin_rounded : Icons.download_for_offline_outlined,
                                 color: isOff ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
-                                size: 26,
+                                size: 24,
                               ),
                               tooltip: isOff ? "Tersimpan Offline (0s Delay)" : "Simpan Lagu Offline",
                               onPressed: () async {
@@ -199,7 +202,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
                         // Add to Playlist (Star Button)
                         IconButton(
-                          icon: const Icon(Icons.star_rounded, color: Colors.amberAccent, size: 28),
+                          visualDensity: VisualDensity.compact,
+                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                          padding: const EdgeInsets.all(4),
+                          icon: const Icon(Icons.star_rounded, color: Colors.amberAccent, size: 25),
                           tooltip: "Tambahkan ke Playlist",
                           onPressed: () {
                             PlaylistPickerModal.show(context, ref, song);
@@ -211,10 +217,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                           builder: (context, ref, _) {
                             final isFav = ref.watch(libraryProvider).isFavorite(song);
                             return IconButton(
+                              visualDensity: VisualDensity.compact,
+                              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                              padding: const EdgeInsets.all(4),
                               icon: Icon(
                                 isFav ? Icons.favorite : Icons.favorite_border,
                                 color: isFav ? Colors.redAccent : Colors.white70,
-                                size: 26,
+                                size: 24,
                               ),
                               tooltip: isFav ? "Hapus dari Favorit" : "Tambah ke Favorit",
                               onPressed: () {
@@ -226,7 +235,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
                         if (playerState.errorMessage != null)
                           IconButton(
-                            icon: const Icon(Icons.refresh, color: Colors.amberAccent),
+                            visualDensity: VisualDensity.compact,
+                            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                            padding: const EdgeInsets.all(4),
+                            icon: const Icon(Icons.refresh, color: Colors.amberAccent, size: 24),
                             tooltip: "Coba Putar Ulang",
                             onPressed: () {
                               ref.read(playerProvider).playSong(song);

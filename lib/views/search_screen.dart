@@ -180,51 +180,63 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
 
             // Results List
             Expanded(
-              child: musicState.isSearching
-                  ? const Center(
+              child: Builder(
+                builder: (context) {
+                  final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+                  if (musicState.isSearching) {
+                    return const Center(
                       child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan),
-                    )
-                  : musicState.searchResults.isEmpty && _searchController.text.isNotEmpty
-                      ? Center(
-                          child: Text(
-                            "Tidak ada hasil untuk '${_searchController.text}'",
-                            style: TextStyle(color: Colors.white.withOpacity(0.6)),
-                          ),
-                        )
-                      : ListView.builder(
-                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                          padding: const EdgeInsets.only(bottom: 160, top: 8),
-                          itemCount: musicState.searchResults.length,
-                          itemBuilder: (context, index) {
-                            final song = musicState.searchResults[index];
-                            final isPlaying = playerState.currentSong?.id == song.id;
+                    );
+                  }
+                  if (musicState.searchResults.isEmpty && _searchController.text.isNotEmpty) {
+                    return Center(
+                      child: Text(
+                        "Tidak ada hasil untuk '${_searchController.text}'",
+                        style: TextStyle(color: Colors.white.withOpacity(0.6)),
+                      ),
+                    );
+                  }
+                  return GridView.builder(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: EdgeInsets.only(bottom: isLandscape ? 85 : 160, top: 8),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 520,
+                      mainAxisExtent: 78,
+                      crossAxisSpacing: 0,
+                      mainAxisSpacing: 0,
+                    ),
+                    itemCount: musicState.searchResults.length,
+                    itemBuilder: (context, index) {
+                      final song = musicState.searchResults[index];
+                      final isPlaying = playerState.currentSong?.id == song.id;
+                      final isFav = ref.watch(libraryProvider).isFavorite(song);
 
-                            final isFav = ref.watch(libraryProvider).isFavorite(song);
-
-                            return SongTile(
-                              song: song,
-                              isPlaying: isPlaying,
-                              isFavorite: isFav,
-                              onFavoriteTap: () {
-                                ref.read(libraryProvider).toggleFavorite(song);
-                              },
-                              onPlaylistTap: () {
-                                PlaylistPickerModal.show(context, ref, song);
-                              },
-                              onTap: () {
-                                FocusScope.of(context).unfocus();
-                                ref.read(playerProvider).playSong(
-                                      song,
-                                      newQueue: musicState.searchResults,
-                                      index: index,
-                                    );
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(builder: (context) => const PlayerScreen()),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                      return SongTile(
+                        song: song,
+                        isPlaying: isPlaying,
+                        isFavorite: isFav,
+                        onFavoriteTap: () {
+                          ref.read(libraryProvider).toggleFavorite(song);
+                        },
+                        onPlaylistTap: () {
+                          PlaylistPickerModal.show(context, ref, song);
+                        },
+                        onTap: () {
+                          FocusScope.of(context).unfocus();
+                          ref.read(playerProvider).playSong(
+                                song,
+                                newQueue: musicState.searchResults,
+                                index: index,
+                              );
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),

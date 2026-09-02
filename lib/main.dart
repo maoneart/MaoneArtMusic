@@ -74,6 +74,36 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+
+    if (isLandscape) {
+      return Scaffold(
+        body: Row(
+          children: [
+            // Glass Navigation Rail on Left
+            _buildLandscapeNavRail(),
+            // Main Content Area with docked MiniPlayer
+            Expanded(
+              child: Stack(
+                children: [
+                  IndexedStack(
+                    index: _currentIndex,
+                    children: _screens,
+                  ),
+                  const Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 6,
+                    child: MiniPlayer(),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       extendBody: true,
       body: Stack(
@@ -147,6 +177,116 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLandscapeNavRail() {
+    return Container(
+      width: 76,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F131F).withOpacity(0.96),
+        border: Border(
+          right: BorderSide(
+            color: Colors.white.withOpacity(0.12),
+            width: 1.0,
+          ),
+        ),
+      ),
+      child: SafeArea(
+        right: false,
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            // Logo / App Icon
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.4),
+                    blurRadius: 10,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/images/ic_launcher.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(color: Colors.white12, indent: 12, endIndent: 12, height: 1),
+            const SizedBox(height: 6),
+            // Navigation Items
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildRailItem(0, Icons.home_rounded, Icons.home_outlined, "Home"),
+                    const SizedBox(height: 6),
+                    _buildRailItem(1, Icons.search_rounded, Icons.search_outlined, "Cari"),
+                    const SizedBox(height: 6),
+                    _buildRailItem(2, Icons.library_music_rounded, Icons.library_music_outlined, "Koleksi"),
+                    const SizedBox(height: 6),
+                    _buildRailItem(3, Icons.settings_rounded, Icons.settings_outlined, "Pengaturan"),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRailItem(int index, IconData activeIcon, IconData inactiveIcon, String label) {
+    final isSelected = _currentIndex == index;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() {
+          _currentIndex = index;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 64,
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? MaoneArtTheme.spotifyGreen.withOpacity(0.16) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? MaoneArtTheme.spotifyGreen.withOpacity(0.4) : Colors.transparent,
+            width: 1.0,
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isSelected ? activeIcon : inactiveIcon,
+              color: isSelected ? MaoneArtTheme.spotifyGreenBright : Colors.white.withOpacity(0.55),
+              size: 22,
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? MaoneArtTheme.spotifyGreenBright : Colors.white.withOpacity(0.55),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -17,6 +17,7 @@ class HomeScreen extends ConsumerWidget {
     final musicState = ref.watch(musicProvider);
     final playerState = ref.watch(playerProvider);
     final libraryState = ref.watch(libraryProvider);
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
     return Scaffold(
       body: SafeArea(
@@ -26,7 +27,7 @@ class HomeScreen extends ConsumerWidget {
           onRefresh: () => ref.read(musicProvider).fetchTrending(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 150),
+            padding: EdgeInsets.only(bottom: isLandscape ? 85 : 150),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -119,107 +120,217 @@ class HomeScreen extends ConsumerWidget {
                       ],
                     ),
                     padding: const EdgeInsets.all(18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: MaoneArtTheme.spotifyGreen.withOpacity(0.25),
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.5)),
+                    child: isLandscape
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: MaoneArtTheme.spotifyGreen.withOpacity(0.25),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.5)),
+                                          ),
+                                          child: const Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.whatshot, size: 14, color: MaoneArtTheme.spotifyGreenBright),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                "MAONEART TRENDING",
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: MaoneArtTheme.spotifyGreenBright,
+                                                  letterSpacing: 1.1,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Text(
+                                          "UPDATED TODAY",
+                                          style: TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 1),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      "Top 10 Charts & Viral Hits",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        height: 1.2,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      "Lagu Paling Sering Diputar Minggu Ini • Dengarkan Tanpa Iklan",
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white.withOpacity(0.7),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: const Row(
+                              const SizedBox(width: 16),
+                              Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.whatshot, size: 14, color: MaoneArtTheme.spotifyGreenBright),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    "MAONEART TRENDING",
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: MaoneArtTheme.spotifyGreenBright,
-                                      letterSpacing: 1.1,
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: MaoneArtTheme.spotifyGreenBright,
+                                      foregroundColor: Colors.black,
+                                      elevation: 4,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                    ),
+                                    onPressed: () {
+                                      if (musicState.trendingSongs.isNotEmpty) {
+                                        ref.read(playerProvider).playSong(
+                                              musicState.trendingSongs.first,
+                                              newQueue: musicState.trendingSongs,
+                                              index: 0,
+                                            );
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.play_arrow, size: 20, color: Colors.black),
+                                    label: const Text(
+                                      "Putar Semua",
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                    ),
+                                    onPressed: () => ref.read(musicProvider).fetchTrending(),
+                                    icon: const Icon(Icons.refresh, size: 16, color: Colors.white70),
+                                    label: const Text(
+                                      "Refresh",
+                                      style: TextStyle(color: Colors.white, fontSize: 12),
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const Text(
-                              "UPDATED TODAY",
-                              style: TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 1),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          "Top 10 Charts & Viral Hits",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            height: 1.2,
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: MaoneArtTheme.spotifyGreen.withOpacity(0.25),
+                                      borderRadius: BorderRadius.circular(20),
+                                      border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.5)),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.whatshot, size: 14, color: MaoneArtTheme.spotifyGreenBright),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          "MAONEART TRENDING",
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: MaoneArtTheme.spotifyGreenBright,
+                                            letterSpacing: 1.1,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Text(
+                                    "UPDATED TODAY",
+                                    style: TextStyle(fontSize: 10, color: Colors.white54, letterSpacing: 1),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              const Text(
+                                "Top 10 Charts & Viral Hits",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  height: 1.2,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Lagu Paling Sering Diputar Minggu Ini • Dengarkan Tanpa Iklan",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withOpacity(0.7),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: MaoneArtTheme.spotifyGreenBright,
+                                      foregroundColor: Colors.black,
+                                      elevation: 4,
+                                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                    ),
+                                    onPressed: () {
+                                      if (musicState.trendingSongs.isNotEmpty) {
+                                        ref.read(playerProvider).playSong(
+                                              musicState.trendingSongs.first,
+                                              newQueue: musicState.trendingSongs,
+                                              index: 0,
+                                            );
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                                        );
+                                      }
+                                    },
+                                    icon: const Icon(Icons.play_arrow, size: 22, color: Colors.black),
+                                    label: const Text(
+                                      "Putar Semua",
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  OutlinedButton.icon(
+                                    style: OutlinedButton.styleFrom(
+                                      side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                    ),
+                                    onPressed: () => ref.read(musicProvider).fetchTrending(),
+                                    icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
+                                    label: const Text(
+                                      "Refresh",
+                                      style: TextStyle(color: Colors.white, fontSize: 13),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          "Lagu Paling Sering Diputar Minggu Ini • Dengarkan Tanpa Iklan",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.white.withOpacity(0.7),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: MaoneArtTheme.spotifyGreenBright,
-                                foregroundColor: Colors.black,
-                                elevation: 4,
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                              ),
-                              onPressed: () {
-                                if (musicState.trendingSongs.isNotEmpty) {
-                                  ref.read(playerProvider).playSong(
-                                        musicState.trendingSongs.first,
-                                        newQueue: musicState.trendingSongs,
-                                        index: 0,
-                                      );
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(builder: (context) => const PlayerScreen()),
-                                  );
-                                }
-                              },
-                              icon: const Icon(Icons.play_arrow, size: 22, color: Colors.black),
-                              label: const Text(
-                                "Putar Semua",
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.white.withOpacity(0.3)),
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                              ),
-                              onPressed: () => ref.read(musicProvider).fetchTrending(),
-                              icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
-                              label: const Text(
-                                "Refresh",
-                                style: TextStyle(color: Colors.white, fontSize: 13),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
                   ),
                 ),
 
@@ -368,9 +479,15 @@ class HomeScreen extends ConsumerWidget {
                     ),
                   )
                 else
-                  ListView.builder(
+                  GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 520,
+                      mainAxisExtent: 78,
+                      crossAxisSpacing: 0,
+                      mainAxisSpacing: 0,
+                    ),
                     itemCount: musicState.trendingSongs.length,
                     itemBuilder: (context, index) {
                       final song = musicState.trendingSongs[index];
@@ -401,7 +518,7 @@ class HomeScreen extends ConsumerWidget {
                       );
                     },
                   ),
-                const SizedBox(height: 140),
+                SizedBox(height: isLandscape ? 40 : 140),
               ],
             ),
           ),

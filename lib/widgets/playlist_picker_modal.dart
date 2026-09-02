@@ -19,6 +19,7 @@ class PlaylistPickerModal {
           builder: (context, ref, _) {
             final libraryState = ref.watch(libraryProvider);
             final playlists = libraryState.playlists;
+            final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 
             return ClipRRect(
               borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -26,9 +27,12 @@ class PlaylistPickerModal {
                 filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
                 child: Container(
                   constraints: BoxConstraints(
-                    maxHeight: MediaQuery.of(context).size.height * 0.75,
+                    maxHeight: MediaQuery.of(context).size.height * (isLandscape ? 0.92 : 0.75),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: isLandscape ? 10 : 16,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF0F1422).withOpacity(0.92),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
@@ -283,85 +287,87 @@ class PlaylistPickerModal {
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.playlist_add_rounded, color: MaoneArtTheme.primaryCyan, size: 36),
-                    const SizedBox(height: 12),
-                    const Text(
-                      "Playlist Baru",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: controller,
-                      autofocus: true,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: "Nama Playlist (misal: Favoritku)",
-                        hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
-                        filled: true,
-                        fillColor: Colors.white.withOpacity(0.08),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(color: MaoneArtTheme.primaryCyan),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.playlist_add_rounded, color: MaoneArtTheme.primaryCyan, size: 36),
+                      const SizedBox(height: 12),
+                      const Text(
+                        "Playlist Baru",
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: controller,
+                        autofocus: true,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: "Nama Playlist (misal: Favoritku)",
+                          hintStyle: TextStyle(color: Colors.white.withOpacity(0.4)),
+                          filled: true,
+                          fillColor: Colors.white.withOpacity(0.08),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(color: MaoneArtTheme.primaryCyan),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 44,
-                            child: OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: Colors.white.withOpacity(0.3)),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton(
+                                style: OutlinedButton.styleFrom(
+                                  side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () => Navigator.of(dialogCtx).pop(),
+                                child: const Text("Batal", style: TextStyle(color: Colors.white70)),
                               ),
-                              onPressed: () => Navigator.of(dialogCtx).pop(),
-                              child: const Text("Batal", style: TextStyle(color: Colors.white70)),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: 44,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: MaoneArtTheme.primaryCyan,
-                                foregroundColor: Colors.black,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: MaoneArtTheme.primaryCyan,
+                                  foregroundColor: Colors.black,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                ),
+                                onPressed: () async {
+                                  final name = controller.text.trim();
+                                  if (name.isNotEmpty) {
+                                    Navigator.of(dialogCtx).pop();
+                                    await ref.read(libraryProvider).createPlaylist(name);
+                                    // Auto add song to the new playlist
+                                    final updatedPlaylists = ref.read(libraryProvider).playlists;
+                                    final newPl = updatedPlaylists.lastWhere((p) => p.name == name);
+                                    await ref.read(libraryProvider).addSongToPlaylist(newPl.id, song);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text("⭐ Playlist '$name' dibuat & lagu ditambahkan!"),
+                                        backgroundColor: MaoneArtTheme.spotifyGreen,
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: const Text("Buat & Tambah", style: TextStyle(fontWeight: FontWeight.bold)),
                               ),
-                              onPressed: () async {
-                                final name = controller.text.trim();
-                                if (name.isNotEmpty) {
-                                  Navigator.of(dialogCtx).pop();
-                                  await ref.read(libraryProvider).createPlaylist(name);
-                                  // Auto add song to the new playlist
-                                  final updatedPlaylists = ref.read(libraryProvider).playlists;
-                                  final newPl = updatedPlaylists.lastWhere((p) => p.name == name);
-                                  await ref.read(libraryProvider).addSongToPlaylist(newPl.id, song);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text("⭐ Playlist '$name' dibuat & lagu ditambahkan!"),
-                                      backgroundColor: MaoneArtTheme.spotifyGreen,
-                                    ),
-                                  );
-                                }
-                              },
-                              child: const Text("Buat & Tambah", style: TextStyle(fontWeight: FontWeight.bold)),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -161,6 +161,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     final libraryState = ref.watch(libraryProvider);
     final playerState = ref.watch(playerProvider);
 
+    final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
+    final bottomPadding = isLandscape ? 85.0 : 160.0;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -213,8 +216,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                             style: TextStyle(color: Colors.white.withOpacity(0.5)),
                           ),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      : GridView.builder(
+                          padding: EdgeInsets.only(bottom: bottomPadding, top: 12),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 520,
+                            mainAxisExtent: 78,
+                            crossAxisSpacing: 0,
+                            mainAxisSpacing: 0,
+                          ),
                           itemCount: libraryState.favorites.length,
                           itemBuilder: (context, index) {
                             final song = libraryState.favorites[index];
@@ -270,77 +279,83 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                             ],
                           ),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 160),
+                      : GridView.builder(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, bottomPadding),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 420,
+                            mainAxisExtent: 84,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                          ),
                           itemCount: libraryState.playlists.length,
                           itemBuilder: (context, index) {
                             final playlist = libraryState.playlists[index];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: GlassContainer(
-                                borderRadius: 16,
-                                padding: const EdgeInsets.all(16),
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (context) => PlaylistDetailScreen(playlist: playlist),
+                            return GlassContainer(
+                              borderRadius: 16,
+                              padding: const EdgeInsets.all(14),
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => PlaylistDetailScreen(playlist: playlist),
+                                  ),
+                                );
+                              },
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: MaoneArtTheme.primaryPurple.withOpacity(0.3),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
-                                  );
-                                },
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 50,
-                                      height: 50,
-                                      decoration: BoxDecoration(
-                                        color: MaoneArtTheme.primaryPurple.withOpacity(0.3),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: const Icon(Icons.music_note, color: Colors.white),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            playlist.name,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: Colors.white,
-                                            ),
+                                    child: const Icon(Icons.music_note, color: Colors.white),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          playlist.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15,
+                                            color: Colors.white,
                                           ),
-                                          const SizedBox(height: 4),
-                                          Text(
-                                            "${playlist.songs.length} Lagu",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.white.withOpacity(0.6),
-                                            ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 3),
+                                        Text(
+                                          "${playlist.songs.length} Lagu",
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white.withOpacity(0.6),
                                           ),
-                                        ],
-                                      ),
+                                        ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-                                      onPressed: () async {
-                                        final confirm = await MaoneArtGlassModal.showConfirmModal(
-                                          context: context,
-                                          title: "Hapus Playlist?",
-                                          message: "Apakah Anda yakin ingin menghapus playlist '${playlist.name}'?",
-                                          confirmText: "Hapus",
-                                          cancelText: "Batal",
-                                          icon: Icons.delete_forever,
-                                          iconColor: Colors.redAccent,
-                                        );
-                                        if (confirm == true) {
-                                          ref.read(libraryProvider).deletePlaylist(playlist.id);
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                    onPressed: () async {
+                                      final confirm = await MaoneArtGlassModal.showConfirmModal(
+                                        context: context,
+                                        title: "Hapus Playlist?",
+                                        message: "Apakah Anda yakin ingin menghapus playlist '${playlist.name}'?",
+                                        confirmText: "Hapus",
+                                        cancelText: "Batal",
+                                        icon: Icons.delete_forever,
+                                        iconColor: Colors.redAccent,
+                                      );
+                                      if (confirm == true) {
+                                        ref.read(libraryProvider).deletePlaylist(playlist.id);
+                                      }
+                                    },
+                                  ),
+                                ],
                               ),
                             );
                           },
@@ -367,8 +382,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                             ],
                           ),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 160, top: 12),
+                      : GridView.builder(
+                          padding: EdgeInsets.only(bottom: bottomPadding, top: 12),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 520,
+                            mainAxisExtent: 78,
+                            crossAxisSpacing: 0,
+                            mainAxisSpacing: 0,
+                          ),
                           itemCount: libraryState.offlineSongs.length,
                           itemBuilder: (context, index) {
                             final song = libraryState.offlineSongs[index];

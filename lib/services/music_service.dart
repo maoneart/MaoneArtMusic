@@ -537,16 +537,18 @@ class MusicService {
     return songs;
   }
 
-  /// Fetch lyrics from LRCLIB API with multi-tier cascade fallback
-  Future<String?> getSongLyrics(String title, String artist) async {
+  /// Fetch lyrics from LRCLIB API with multi-tier cascade fallback and duration matching
+  Future<String?> getSongLyrics(String title, String artist, {int? durationSeconds}) async {
     final cleanTitle = formatSongTitle(title);
     final cleanArtist = artist.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '').trim();
 
-    // 1. Exact LRCLIB match
+    // 1. Exact LRCLIB match with duration filter
     try {
-      final uri = Uri.parse(
-        'https://lrclib.net/api/get?artist_name=${Uri.encodeComponent(cleanArtist)}&track_name=${Uri.encodeComponent(cleanTitle)}',
-      );
+      String url = 'https://lrclib.net/api/get?artist_name=${Uri.encodeComponent(cleanArtist)}&track_name=${Uri.encodeComponent(cleanTitle)}';
+      if (durationSeconds != null && durationSeconds > 0) {
+        url += '&duration=$durationSeconds';
+      }
+      final uri = Uri.parse(url);
       final res = await http.get(uri).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -557,7 +559,22 @@ class MusicService {
       }
     } catch (_) {}
 
-    // 2. LRCLIB query search
+    // 2. Exact LRCLIB match without duration (in case duration varies slightly)
+    try {
+      final uri = Uri.parse(
+        'https://lrclib.net/api/get?artist_name=${Uri.encodeComponent(cleanArtist)}&track_name=${Uri.encodeComponent(cleanTitle)}',
+      );
+      final res = await http.get(uri).timeout(const Duration(seconds: 3));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        final synced = data['syncedLyrics'];
+        if (synced != null && synced.toString().isNotEmpty) return synced;
+        final plain = data['plainLyrics'];
+        if (plain != null && plain.toString().isNotEmpty) return plain;
+      }
+    } catch (_) {}
+
+    // 3. LRCLIB query search sorted by closest duration match
     try {
       final queryUri = Uri.parse(
         'https://lrclib.net/api/search?q=${Uri.encodeComponent('$cleanTitle $cleanArtist')}',
@@ -566,6 +583,17 @@ class MusicService {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         if (data is List && data.isNotEmpty) {
+          // Sort items by closeness to audio duration if available
+          if (durationSeconds != null && durationSeconds > 0) {
+            data.sort((a, b) {
+              final durA = (a['duration'] as num?)?.toDouble() ?? 0.0;
+              final durB = (b['duration'] as num?)?.toDouble() ?? 0.0;
+              final diffA = (durA - durationSeconds).abs();
+              final diffB = (durB - durationSeconds).abs();
+              return diffA.compareTo(diffB);
+            });
+          }
+
           for (final item in data) {
             final synced = item['syncedLyrics'];
             if (synced != null && synced.toString().isNotEmpty) return synced;
@@ -576,7 +604,7 @@ class MusicService {
       }
     } catch (_) {}
 
-    // 3. LRCLIB title only search
+    // 4. LRCLIB title only search
     try {
       final titleUri = Uri.parse(
         'https://lrclib.net/api/search?track_name=${Uri.encodeComponent(cleanTitle)}',

@@ -54,7 +54,7 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
     if (widget.lyrics.isEmpty) return -1;
     int idx = -1;
     for (int i = 0; i < widget.lyrics.length; i++) {
-      if (widget.currentPosition >= widget.lyrics[i].timestamp - const Duration(milliseconds: 250)) {
+      if (widget.currentPosition >= widget.lyrics[i].timestamp - const Duration(milliseconds: 50)) {
         idx = i;
       } else {
         break;

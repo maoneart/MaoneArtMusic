@@ -8,40 +8,58 @@ class LyricLine {
   });
 
   /// Parse string lirik format .LRC menjadi daftar LyricLine
-  /// Menghilangkan tag waktu [mm:ss.xx] agar pengguna melihat teks bersih tanpa melihat angka waktu
+  /// Mendukung tag [offset:+/-ms] dan multi-timestamp agar lirik sinkron sempurna
   static List<LyricLine> parseLrc(String? rawLrc) {
     if (rawLrc == null || rawLrc.trim().isEmpty) return [];
 
     final List<LyricLine> lines = [];
-    final regExp = RegExp(r'\[(\d+):(\d+)(?:[.:](\d+))?\](.*)');
+    int offsetMs = 0;
+
+    // 1. Ekstrak tag [offset: +/-ms] jika ada
+    final offsetRegExp = RegExp(r'\[offset:\s*([+-]?\d+)\s*\]', caseSensitive: false);
+    for (final raw in rawLrc.split('\n')) {
+      final line = raw.trim();
+      final offsetMatch = offsetRegExp.firstMatch(line);
+      if (offsetMatch != null) {
+        offsetMs = int.tryParse(offsetMatch.group(1) ?? '0') ?? 0;
+        break;
+      }
+    }
+
+    final timeTagRegExp = RegExp(r'\[(\d+):(\d+)(?:[.:](\d+))?\]');
 
     for (final raw in rawLrc.split('\n')) {
       final line = raw.trim();
-      if (line.isEmpty) continue;
+      if (line.isEmpty || line.startsWith('[offset:') || line.startsWith('[ti:') || line.startsWith('[ar:') || line.startsWith('[al:')) {
+        continue;
+      }
 
-      final match = regExp.firstMatch(line);
-      if (match != null) {
-        final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
-        final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
-        final msStr = match.group(3) ?? '0';
-        int milliseconds = 0;
-        if (msStr.length == 2) {
-          milliseconds = (int.tryParse(msStr) ?? 0) * 10;
-        } else if (msStr.length == 3) {
-          milliseconds = int.tryParse(msStr) ?? 0;
-        } else {
-          milliseconds = int.tryParse(msStr) ?? 0;
-        }
-
-        final totalMs = (minutes * 60 * 1000) + (seconds * 1000) + milliseconds;
-        final rawText = (match.group(4) ?? '').trim();
-        final text = rawText.replaceAll(RegExp(r'\[\d+:\d+(?:[.:]\d+)?\]'), '').trim();
-
+      final matches = timeTagRegExp.allMatches(line);
+      if (matches.isNotEmpty) {
+        // Bersihkan seluruh tag waktu dari teks
+        final text = line.replaceAll(timeTagRegExp, '').trim();
         if (text.isNotEmpty) {
-          lines.add(LyricLine(
-            timestamp: Duration(milliseconds: totalMs),
-            text: text,
-          ));
+          for (final match in matches) {
+            final minutes = int.tryParse(match.group(1) ?? '0') ?? 0;
+            final seconds = int.tryParse(match.group(2) ?? '0') ?? 0;
+            final msStr = match.group(3) ?? '0';
+            int milliseconds = 0;
+            if (msStr.length == 2) {
+              milliseconds = (int.tryParse(msStr) ?? 0) * 10;
+            } else if (msStr.length == 3) {
+              milliseconds = int.tryParse(msStr) ?? 0;
+            } else {
+              milliseconds = int.tryParse(msStr) ?? 0;
+            }
+
+            final totalMs = (minutes * 60 * 1000) + (seconds * 1000) + milliseconds + offsetMs;
+            final safeMs = totalMs < 0 ? 0 : totalMs;
+
+            lines.add(LyricLine(
+              timestamp: Duration(milliseconds: safeMs),
+              text: text,
+            ));
+          }
         }
       }
     }

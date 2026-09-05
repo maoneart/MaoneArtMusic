@@ -323,7 +323,11 @@ class PlayerStateNotifier extends ChangeNotifier {
     _plainLyrics = null;
     notifyListeners();
     try {
-      final lyrics = await _musicService.getSongLyrics(song.title, song.artist);
+      final lyrics = await _musicService.getSongLyrics(
+        song.title,
+        song.artist,
+        durationSeconds: song.durationSeconds,
+      );
       if (_currentSong?.id == song.id && lyrics != null && lyrics.trim().isNotEmpty) {
         _currentLyrics = lyrics;
         if (lyrics.contains('[') && lyrics.contains(']')) {

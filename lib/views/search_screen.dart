@@ -7,6 +7,7 @@ import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/song_tile.dart';
 import '../widgets/playlist_picker_modal.dart';
+import '../models/song.dart';
 import 'player_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -196,9 +197,61 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       ),
                     );
                   }
-                  return GridView.builder(
-                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.only(bottom: isLandscape ? 85 : 160, top: 8),
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "${musicState.searchResults.length} Lagu Ditemukan",
+                              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () {
+                                final shuffledList = List<Song>.from(musicState.searchResults)..shuffle();
+                                ref.read(playerProvider).playSong(
+                                      shuffledList.first,
+                                      newQueue: shuffledList,
+                                      index: 0,
+                                    );
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: MaoneArtTheme.spotifyGreen.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.4)),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.shuffle, size: 14, color: MaoneArtTheme.spotifyGreenBright),
+                                    SizedBox(width: 6),
+                                    Text(
+                                      "Putar Acak Artis",
+                                      style: TextStyle(
+                                        color: MaoneArtTheme.spotifyGreenBright,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: GridView.builder(
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          padding: EdgeInsets.only(bottom: isLandscape ? 85 : 160, top: 4),
                     gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                       maxCrossAxisExtent: 520,
                       mainAxisExtent: 78,
@@ -234,7 +287,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         },
                       );
                     },
-                  );
+                  ),
+                ),
+              ],
+            );
                 },
               ),
             ),

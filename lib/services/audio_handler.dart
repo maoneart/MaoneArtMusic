@@ -43,10 +43,10 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     _player = AudioPlayer(
       audioLoadConfiguration: const AudioLoadConfiguration(
         androidLoadControl: AndroidLoadControl(
-          minBufferDuration: Duration(seconds: 2),
+          minBufferDuration: Duration(milliseconds: 800),
           maxBufferDuration: Duration(seconds: 30),
-          bufferForPlaybackDuration: Duration(milliseconds: 150),
-          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 300),
+          bufferForPlaybackDuration: Duration(milliseconds: 80),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 200),
           prioritizeTimeOverSizeThresholds: true,
         ),
       ),

@@ -625,4 +625,62 @@ class MusicService {
 
     return null;
   }
+
+  /// Fetch Artist Radio / Trending tracks for endless continuous playback ("ga putus-putus")
+  Future<List<Song>> getArtistRadioSongs(String artist, {String? currentSongTitle, int limit = 15}) async {
+    final cleanArtist = artist
+        .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
+        .replaceAll('Various Artists', '')
+        .replaceAll('- Topic', '')
+        .replaceAll('Topic', '')
+        .trim();
+
+    if (cleanArtist.isEmpty) return [];
+
+    final List<Song> radioSongs = [];
+    final Set<String> seenIds = {};
+
+    // 1. Search artist top popular hits and trending releases
+    final searchQueries = [
+      '$cleanArtist top songs hits trending',
+      '$cleanArtist lagu populer terbaru',
+    ];
+
+    for (final q in searchQueries) {
+      try {
+        final results = await searchSongs(q, limit: limit);
+        for (final s in results) {
+          final sTitle = s.title.toLowerCase();
+          final sArtist = s.artist.toLowerCase();
+          final artistLower = cleanArtist.toLowerCase();
+
+          // Don't add identical song if currentSongTitle is provided
+          if (currentSongTitle != null && sTitle == currentSongTitle.toLowerCase()) continue;
+
+          // Ensure it matches the artist
+          final isArtistMatch = sArtist.contains(artistLower) || sTitle.contains(artistLower);
+          if (isArtistMatch && seenIds.add(s.id)) {
+            radioSongs.add(s);
+          }
+        }
+      } catch (_) {}
+      if (radioSongs.length >= limit) break;
+    }
+
+    // 2. Fallback: if not enough tracks found, do broader search
+    if (radioSongs.length < 5) {
+      try {
+        final fallback = await searchSongs('$cleanArtist songs', limit: limit);
+        for (final s in fallback) {
+          if (seenIds.add(s.id)) {
+            radioSongs.add(s);
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Shuffle the results so next songs feel dynamic, fresh, and randomized!
+    radioSongs.shuffle();
+    return radioSongs;
+  }
 }

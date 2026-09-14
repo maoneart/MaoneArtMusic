@@ -145,7 +145,10 @@ class YoutubeAudioExtractor {
 
   static Future<List<String>> _extractCandidateUrlsInternal(Song song, {required String quality, required String cacheKey}) async {
     final List<String> candidateUrls = [];
-    final String? directVideoId = song.youtubeId;
+    final String? directVideoId = song.youtubeId ??
+        (song.id.startsWith('yt_')
+            ? song.id.substring(3)
+            : (song.id.length == 11 ? song.id : null));
 
     // A. Direct Video ID Extraction
     if (directVideoId != null && directVideoId.isNotEmpty) {
@@ -153,7 +156,7 @@ class YoutubeAudioExtractor {
         try {
           final liveUrl = await _yt.videos.streamsClient
               .getHttpLiveStreamUrl(VideoId(directVideoId))
-              .timeout(const Duration(seconds: 6));
+              .timeout(const Duration(seconds: 4));
           if (liveUrl.isNotEmpty) {
             candidateUrls.add(liveUrl);
             _saveToCaches(cacheKey, candidateUrls);
@@ -164,13 +167,24 @@ class YoutubeAudioExtractor {
 
       StreamManifest? manifest;
 
-      // ⚡ Direct high-reliability single-pass stream extraction (tanpa delay timeout client rusak)
+      // ⚡ Musify Engine: Direct extraction using androidMusic & ios clients (NO decipher / player.js overhead, ~250ms)
       try {
         manifest = await _yt.videos.streamsClient
-            .getManifest(directVideoId)
-            .timeout(const Duration(seconds: 6));
+            .getManifest(
+              directVideoId,
+              ytClients: [
+                YoutubeApiClient.androidMusic,
+                YoutubeApiClient.ios,
+              ],
+            )
+            .timeout(const Duration(seconds: 4));
       } catch (e) {
-        print('Direct manifest extraction notice for $directVideoId: $e');
+        print('Fast ytClients extraction notice for $directVideoId: $e');
+        try {
+          manifest = await _yt.videos.streamsClient
+              .getManifest(directVideoId)
+              .timeout(const Duration(seconds: 5));
+        } catch (_) {}
       }
 
       if (manifest != null && manifest.audioOnly.isNotEmpty) {
@@ -237,9 +251,21 @@ class YoutubeAudioExtractor {
             StreamManifest? manifest;
             try {
               manifest = await _yt.videos.streamsClient
-                  .getManifest(video.id.value)
-                  .timeout(const Duration(seconds: 5));
-            } catch (_) {}
+                  .getManifest(
+                    video.id.value,
+                    ytClients: [
+                      YoutubeApiClient.androidMusic,
+                      YoutubeApiClient.ios,
+                    ],
+                  )
+                  .timeout(const Duration(seconds: 4));
+            } catch (_) {
+              try {
+                manifest = await _yt.videos.streamsClient
+                    .getManifest(video.id.value)
+                    .timeout(const Duration(seconds: 4));
+              } catch (_) {}
+            }
 
             if (manifest != null && manifest.audioOnly.isNotEmpty) {
               final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);

@@ -16,7 +16,15 @@ enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 enum MusicRepeatMode { off, all, one }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  final AudioPlayer _localPlayer = AudioPlayer();
+  final AudioPlayer _localPlayer = AudioPlayer(
+    audioLoadConfiguration: const AudioLoadConfiguration(
+      androidLoadControl: AndroidLoadControl(
+        maxBufferDuration: Duration(seconds: 60),
+        bufferForPlaybackDuration: Duration(milliseconds: 250),
+        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+      ),
+    ),
+  );
   final StorageService _storageService = StorageService();
   final MusicService _musicService = MusicService();
 

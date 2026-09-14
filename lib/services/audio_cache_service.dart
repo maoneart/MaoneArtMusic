@@ -60,6 +60,12 @@ class AudioCacheService {
   ));
 
   Directory? _cacheDir;
+  List<CacheRecord>? _memoryRecords;
+
+  /// Warm up cache records in RAM at app startup
+  Future<void> warmUp() async {
+    await _loadRecords();
+  }
 
   Future<Directory> _getCacheDirectory() async {
     if (_cacheDir != null) return _cacheDir!;
@@ -73,47 +79,63 @@ class AudioCacheService {
   }
 
   Future<List<CacheRecord>> _loadRecords() async {
+    if (_memoryRecords != null) return _memoryRecords!;
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString(_recordsKey);
-    if (data == null || data.isEmpty) return [];
+    if (data == null || data.isEmpty) {
+      _memoryRecords = [];
+      return [];
+    }
     try {
       final List list = json.decode(data);
-      return list.map((item) => CacheRecord.fromMap(item)).toList();
+      _memoryRecords = list.map((item) => CacheRecord.fromMap(item)).toList();
+      return _memoryRecords!;
     } catch (_) {
+      _memoryRecords = [];
       return [];
     }
   }
 
   Future<void> _saveRecords(List<CacheRecord> records) async {
+    _memoryRecords = List.from(records);
     final prefs = await SharedPreferences.getInstance();
     final String data = json.encode(records.map((r) => r.toMap()).toList());
     await prefs.setString(_recordsKey, data);
   }
 
-  /// Cek apakah file audio lokal untuk lagu ini ada di memori HP
+  /// Cek apakah file audio lokal untuk lagu ini ada di memori HP (0ms RAM-backed check)
   Future<String?> getLocalAudioPath(Song song) async {
     final records = await _loadRecords();
-    final idx = records.indexWhere((r) => r.songId == song.id || (song.youtubeId != null && r.songId == 'yt_${song.youtubeId}'));
+    final ytid = song.youtubeId;
+    final idx = records.indexWhere((r) => r.songId == song.id || (ytid != null && (r.songId == 'yt_$ytid' || r.songId == ytid)));
     if (idx == -1) return null;
 
     final record = records[idx];
     final file = File(record.localPath);
     if (await file.exists() && await file.length() > 1024) {
-      // Update last accessed time for LRU tracking
-      records[idx] = CacheRecord(
-        songId: record.songId,
-        localPath: record.localPath,
-        fileSizeBytes: record.fileSizeBytes,
-        lastAccessed: DateTime.now(),
-        isPinned: record.isPinned,
-        songMap: record.songMap,
-      );
-      await _saveRecords(records);
+      // Update last accessed time for LRU asynchronously (non-blocking)
+      Future.microtask(() async {
+        try {
+          final cur = await _loadRecords();
+          final curIdx = cur.indexWhere((r) => r.songId == record.songId);
+          if (curIdx != -1) {
+            cur[curIdx] = CacheRecord(
+              songId: record.songId,
+              localPath: record.localPath,
+              fileSizeBytes: record.fileSizeBytes,
+              lastAccessed: DateTime.now(),
+              isPinned: record.isPinned,
+              songMap: record.songMap,
+            );
+            await _saveRecords(cur);
+          }
+        } catch (_) {}
+      });
       return record.localPath;
     } else {
       // File has been removed from disk, purge record
       records.removeAt(idx);
-      await _saveRecords(records);
+      _saveRecords(records);
       return null;
     }
   }

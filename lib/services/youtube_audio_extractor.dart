@@ -129,25 +129,48 @@ class YoutubeAudioExtractor {
         } catch (_) {}
       }
 
+      StreamManifest? manifest;
+
+      // ⚡ 1. Musify Ultra-Fast InnerTube Clients (Android Music + iOS, requireWatchPage: false)
+      // Bypasses JS challenge solver & watch page scraping -> streams resolved in ~200-300ms!
       try {
-        final manifest = await _yt.videos.streamsClient
-            .getManifest(directVideoId)
-            .timeout(const Duration(seconds: 7));
+        manifest = await _yt.videos.streamsClient.getManifest(
+          directVideoId,
+          ytClients: const [
+            YoutubeApiClient.androidMusic,
+            YoutubeApiClient.ios,
+            YoutubeApiClient.androidVr,
+          ],
+          requireWatchPage: false,
+        ).timeout(const Duration(seconds: 4));
+      } catch (fastErr) {
+        print('Fast InnerTube extraction notice for $directVideoId: $fastErr');
+      }
 
-        if (manifest.audioOnly.isNotEmpty) {
-          // Primary selected stream (AAC / Tag 140)
-          try {
-            final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
-            candidateUrls.add(primary.url.toString());
-          } catch (_) {}
+      // 2. Safe Fallback to standard client if fast clients failed
+      if (manifest == null || manifest.audioOnly.isEmpty) {
+        try {
+          manifest = await _yt.videos.streamsClient
+              .getManifest(directVideoId, requireWatchPage: true)
+              .timeout(const Duration(seconds: 6));
+        } catch (e) {
+          print('Direct manifest fallback extraction notice for $directVideoId: $e');
+        }
+      }
 
-          // Add remaining audio streams as failovers
-          final sortedAudio = manifest.audioOnly.sortByBitrate();
-          for (final a in sortedAudio) {
-            final urlStr = a.url.toString();
-            if (!candidateUrls.contains(urlStr)) {
-              candidateUrls.add(urlStr);
-            }
+      if (manifest != null && manifest.audioOnly.isNotEmpty) {
+        // Primary selected stream (AAC / Tag 140)
+        try {
+          final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
+          candidateUrls.add(primary.url.toString());
+        } catch (_) {}
+
+        // Add remaining audio streams as failovers
+        final sortedAudio = manifest.audioOnly.sortByBitrate();
+        for (final a in sortedAudio) {
+          final urlStr = a.url.toString();
+          if (!candidateUrls.contains(urlStr)) {
+            candidateUrls.add(urlStr);
           }
         }
 
@@ -166,8 +189,6 @@ class YoutubeAudioExtractor {
           _saveToCaches(cacheKey, candidateUrls);
           return candidateUrls;
         }
-      } catch (e) {
-        print('Direct manifest extraction notice for $directVideoId: $e');
       }
     }
 
@@ -198,14 +219,29 @@ class YoutubeAudioExtractor {
 
         for (final video in candidates) {
           try {
-            final manifest = await _yt.videos.streamsClient
-                .getManifest(video.id.value)
-                .timeout(const Duration(seconds: 5));
+            StreamManifest? manifest;
+            try {
+              manifest = await _yt.videos.streamsClient.getManifest(
+                video.id.value,
+                ytClients: const [
+                  YoutubeApiClient.androidMusic,
+                  YoutubeApiClient.ios,
+                  YoutubeApiClient.androidVr,
+                ],
+                requireWatchPage: false,
+              ).timeout(const Duration(seconds: 4));
+            } catch (_) {}
 
-            if (manifest.audioOnly.isNotEmpty) {
+            if (manifest == null || manifest.audioOnly.isEmpty) {
+              manifest = await _yt.videos.streamsClient
+                  .getManifest(video.id.value, requireWatchPage: true)
+                  .timeout(const Duration(seconds: 5));
+            }
+
+            if (manifest != null && manifest.audioOnly.isNotEmpty) {
               final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
               candidateUrls.add(primary.url.toString());
-            } else if (manifest.muxed.isNotEmpty) {
+            } else if (manifest != null && manifest.muxed.isNotEmpty) {
               candidateUrls.add(manifest.muxed.withHighestBitrate().url.toString());
             }
 

@@ -222,9 +222,10 @@ class PlayerStateNotifier extends ChangeNotifier {
 
         if (_playRequestId != currentRequestId) return;
 
-        final playFuture = _player.play();
-        await _player.setAudioSource(audioSource);
-        await playFuture;
+        await _player.setAudioSource(audioSource, preload: true);
+        unawaited(_player.play().catchError((e) {
+          print("Offline playback start notice: $e");
+        }));
 
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
@@ -271,10 +272,11 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // Panggil play bersamaan agar ExoPlayer langsung bersuara di chunk pertama
-          final playFuture = _player.play();
-          await _player.setAudioSource(audioSource);
-          await playFuture;
+          // ⚡ Musify Instant Play Trigger: Set source with preload: true and unawaited play
+          await _player.setAudioSource(audioSource, preload: true);
+          unawaited(_player.play().catchError((e) {
+            print("Playback start notice: $e");
+          }));
 
           sourceSet = true;
 
@@ -327,8 +329,8 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
     });
 
-    // C. Pre-load lagu berikutnya
-    Future.delayed(const Duration(seconds: 2), () {
+    // C. Pre-load lagu berikutnya langsung (Musify standard)
+    Future.microtask(() {
       if (_currentSong?.id == song.id) {
         _preloadNextTrack();
       }

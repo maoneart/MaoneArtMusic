@@ -569,7 +569,8 @@ class MusicService {
       try {
         final fallback = await searchSongs('$artistName songs', limit: limit);
         for (final s in fallback) {
-          if (seenIds.add(s.youtubeId)) {
+          final sid = s.youtubeId ?? s.id;
+          if (seenIds.add(sid)) {
             songs.add(s);
           }
         }

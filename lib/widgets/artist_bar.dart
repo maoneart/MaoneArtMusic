@@ -168,7 +168,7 @@ class ArtistBar extends StatelessWidget {
 
   Widget _fallbackAvatar() {
     return Container(
-      color: MaoneArtTheme.cardDark,
+      color: MaoneArtTheme.bgDark,
       child: const Icon(
         Icons.person_rounded,
         color: MaoneArtTheme.spotifyGreenBright,

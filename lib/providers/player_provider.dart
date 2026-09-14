@@ -222,9 +222,9 @@ class PlayerStateNotifier extends ChangeNotifier {
 
         if (_playRequestId != currentRequestId) return;
 
-        final playFuture = _player.play();
-        await _player.setAudioSource(audioSource, preload: false);
-        await playFuture;
+        await _player.setAudioSource(audioSource);
+        if (_playRequestId != currentRequestId) return;
+        await _player.play();
 
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
@@ -258,9 +258,6 @@ class PlayerStateNotifier extends ChangeNotifier {
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(streamUrl),
-            headers: const {
-              'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-            },
             tag: MediaItem(
               id: _currentSong!.id,
               title: _currentSong!.title,
@@ -271,10 +268,10 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // ⚡ Musify Instant Play: Aktifkan play() bersamaan agar ExoPlayer langsung bersuara di chunk pertama
-          final playFuture = _player.play();
-          await _player.setAudioSource(audioSource, preload: false);
-          await playFuture;
+          // ⚡ Musify Method: Streaming langsung tanpa header custom, setAudioSource lalu play
+          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 15));
+          if (_playRequestId != currentRequestId) return;
+          await _player.play();
 
           sourceSet = true;
           _triggerPostPlaybackTasks(_currentSong!, streamUrl: streamUrl);

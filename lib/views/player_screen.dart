@@ -136,42 +136,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               ),
         actions: [
           IconButton(
-            icon: playerState.isSearchingKaraoke
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
-                  )
-                : Icon(
-                    playerState.isKaraokeMode ? Icons.mic : Icons.mic_none_outlined,
-                    color: playerState.isKaraokeMode ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
-                    size: isLandscape ? 22 : 24,
-                  ),
-            tooltip: playerState.isKaraokeMode ? "Matikan Karaoke" : "Mode Karaoke (Minus-One)",
-            onPressed: () async {
-              if (!playerState.isKaraokeMode) {
-                setState(() {
-                  _showLyrics = true;
-                  _showQueue = false;
-                });
-              }
-              final success = await ref.read(playerProvider).toggleKaraokeMode();
-              if (!success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    backgroundColor: Color(0xFF141927),
-                    behavior: SnackBarBehavior.floating,
-                    content: Text(
-                      "❌ Instrumen minus-one karaoke tidak ditemukan untuk lagu ini.",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    duration: Duration(seconds: 3),
-                  ),
-                );
-              }
-            },
-          ),
-          IconButton(
             icon: Icon(
               Icons.lyrics_outlined,
               color: _showLyrics ? MaoneArtTheme.primaryCyan : Colors.white70,
@@ -283,9 +247,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ],
                   ),
                 ),
-
-                // Karaoke Minus-One Button
-                _buildKaraokeButton(playerState),
 
                 // Offline Download Button
                 _buildOfflineDownloadButton(song),
@@ -448,7 +409,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   ],
                 ),
               ),
-              _buildKaraokeButton(playerState),
               _buildOfflineDownloadButton(song),
               _buildStarPlaylistButton(song),
               _buildFavoriteButton(song),
@@ -768,48 +728,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   // --- REUSABLE ACTION BUTTONS ---
-  Widget _buildKaraokeButton(PlayerStateNotifier playerState) {
-    return IconButton(
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      padding: const EdgeInsets.all(4),
-      icon: playerState.isSearchingKaraoke
-          ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
-            )
-          : Icon(
-              playerState.isKaraokeMode ? Icons.mic : Icons.mic_none_outlined,
-              color: playerState.isKaraokeMode ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
-              size: 24,
-            ),
-      tooltip: playerState.isKaraokeMode ? "Matikan Karaoke" : "Mode Karaoke (Minus-One)",
-      onPressed: () async {
-        if (!playerState.isKaraokeMode) {
-          setState(() {
-            _showLyrics = true;
-            _showQueue = false;
-          });
-        }
-        final success = await ref.read(playerProvider).toggleKaraokeMode();
-        if (!success && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              backgroundColor: Color(0xFF141927),
-              behavior: SnackBarBehavior.floating,
-              content: Text(
-                "❌ Instrumen minus-one karaoke tidak ditemukan untuk lagu ini.",
-                style: TextStyle(color: Colors.white),
-              ),
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      },
-    );
-  }
-
   Widget _buildOfflineDownloadButton(dynamic song) {
     return Consumer(
       builder: (context, ref, _) {

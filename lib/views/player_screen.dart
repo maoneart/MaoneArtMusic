@@ -267,19 +267,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: playerState.status == PlayerLoadingStatus.loading
-                      ? const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            color: Colors.black,
-                          ),
-                        )
-                      : Icon(
-                          playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 36,
-                          color: Colors.black,
-                        ),
+                  child: Icon(
+                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    size: 38,
+                    color: Colors.black,
+                  ),
                 ),
               ),
 
@@ -425,19 +417,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: playerState.status == PlayerLoadingStatus.loading
-                      ? const Padding(
-                          padding: EdgeInsets.all(14.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.8,
-                            color: Colors.black,
-                          ),
-                        )
-                      : Icon(
-                          playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 32,
-                          color: Colors.black,
-                        ),
+                  child: Icon(
+                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    size: 34,
+                    color: Colors.black,
+                  ),
                 ),
               ),
               IconButton(
@@ -616,19 +600,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: playerState.status == PlayerLoadingStatus.loading
-                      ? const Padding(
-                          padding: EdgeInsets.all(12.0),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.black,
-                          ),
-                        )
-                      : Icon(
-                          playerState.isPlaying ? Icons.pause : Icons.play_arrow,
-                          size: 26,
-                          color: Colors.black,
-                        ),
+                  child: Icon(
+                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                    size: 28,
+                    color: Colors.black,
+                  ),
                 ),
               ),
               IconButton(

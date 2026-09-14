@@ -125,31 +125,18 @@ class MiniPlayer extends ConsumerWidget {
                       ),
 
                       // Play/Pause Control
-                      if (playerState.status == PlayerLoadingStatus.loading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: MaoneArtTheme.spotifyGreenBright,
-                            ),
-                          ),
-                        )
-                      else
-                        IconButton(
-                          constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                          padding: EdgeInsets.zero,
-                          icon: Icon(
-                            playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                          onPressed: () {
-                            ref.read(playerProvider).togglePlayPause();
-                          },
+                      IconButton(
+                        constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                        padding: EdgeInsets.zero,
+                        icon: Icon(
+                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 32,
                         ),
+                        onPressed: () {
+                          ref.read(playerProvider).togglePlayPause();
+                        },
+                      ),
 
                       // Next Track Control
                       IconButton(

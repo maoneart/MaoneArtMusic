@@ -45,7 +45,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   List<Song> get queue => _queue;
   int get currentIndex => _currentIndex;
   PlayerLoadingStatus get status => _status;
-  bool get isPlaying => _status == PlayerLoadingStatus.playing;
+  bool get isPlaying => _player.playing || _status == PlayerLoadingStatus.playing;
   Duration get position => _position;
   Duration get duration => _duration;
   bool get isShuffle => _isShuffle;
@@ -99,11 +99,9 @@ class PlayerStateNotifier extends ChangeNotifier {
 
       if (processingState == ProcessingState.completed) {
         _handleTrackCompletion();
-      } else if (processingState == ProcessingState.buffering || processingState == ProcessingState.loading) {
-        _status = PlayerLoadingStatus.loading;
       } else if (playing) {
         _status = PlayerLoadingStatus.playing;
-      } else if (processingState == ProcessingState.ready && !playing) {
+      } else if (!playing && processingState != ProcessingState.idle) {
         _status = PlayerLoadingStatus.paused;
       } else if (processingState == ProcessingState.idle) {
         _status = PlayerLoadingStatus.idle;
@@ -454,12 +452,10 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
-    if (_status == PlayerLoadingStatus.playing) {
+    if (_player.playing) {
       await pause();
-    } else if (_status == PlayerLoadingStatus.paused) {
+    } else {
       await resume();
-    } else if (_currentSong != null) {
-      await playSong(_currentSong!);
     }
   }
 

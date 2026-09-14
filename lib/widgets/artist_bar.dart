@@ -27,10 +27,12 @@ class ArtistBar extends StatelessWidget {
           color: MaoneArtTheme.spotifyGreen.withOpacity(0.3),
           width: 1.2,
         ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Row(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: onTap,
+            child: Row(
             children: [
               // Circular Artist Avatar
               Container(
@@ -163,7 +165,8 @@ class ArtistBar extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _fallbackAvatar() {

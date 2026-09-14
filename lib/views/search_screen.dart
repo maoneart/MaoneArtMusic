@@ -10,6 +10,7 @@ import '../widgets/playlist_picker_modal.dart';
 import '../models/song.dart';
 import '../models/artist.dart';
 import '../widgets/artist_bar.dart';
+import 'artist_profile_screen.dart';
 import 'player_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -224,21 +225,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                         ...musicState.searchedArtists.take(2).map((artist) => ArtistBar(
                           artist: artist,
                           onTap: () {
-                            ref.read(musicProvider).selectArtist(artist);
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ArtistProfileScreen(artist: artist),
+                              ),
+                            );
                           },
-                          onPlayTap: () async {
-                            await ref.read(musicProvider).selectArtist(artist);
-                            final songs = ref.read(musicProvider).searchResults;
-                            if (songs.isNotEmpty) {
-                              ref.read(playerProvider).playSong(
-                                    songs.first,
-                                    newQueue: songs,
-                                    index: 0,
-                                  );
-                              Navigator.of(context).push(
-                                MaterialPageRoute(builder: (context) => const PlayerScreen()),
-                              );
-                            }
+                          onPlayTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ArtistProfileScreen(artist: artist),
+                              ),
+                            );
                           },
                         )),
                         const SizedBox(height: 6),

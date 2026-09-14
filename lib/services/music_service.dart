@@ -558,16 +558,70 @@ class MusicService {
           }
 
           extractSongs(data);
+
+          // If there's a full playlist endpoint for "Lagu teratas" / "Top songs" (e.g. VLOLAK...), query it
+          String? topSongsPlaylistId;
+          void findTopSongsPlaylist(dynamic obj) {
+            if (topSongsPlaylistId != null) return;
+            if (obj is Map) {
+              if (obj.containsKey('musicShelfRenderer')) {
+                final shelf = obj['musicShelfRenderer'] as Map;
+                final bp = shelf['bottomEndpoint']?['browseEndpoint']?['browseId'] as String?;
+                if (bp != null && bp.isNotEmpty) {
+                  topSongsPlaylistId = bp;
+                  return;
+                }
+              }
+              for (final val in obj.values) {
+                findTopSongsPlaylist(val);
+              }
+            } else if (obj is List) {
+              for (final item in obj) {
+                findTopSongsPlaylist(item);
+              }
+            }
+          }
+
+          findTopSongsPlaylist(data);
+
+          if (topSongsPlaylistId != null && songs.length < limit) {
+            try {
+              final plPayload = json.encode({
+                'context': {
+                  'client': {
+                    'clientName': 'WEB_REMIX',
+                    'clientVersion': '1.20240401.01.00',
+                    'hl': 'id',
+                    'gl': 'ID',
+                  }
+                },
+                'browseId': topSongsPlaylistId,
+              });
+
+              final plRes = await http.post(
+                uri,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                },
+                body: plPayload,
+              ).timeout(const Duration(seconds: 4));
+
+              if (plRes.statusCode == 200) {
+                extractSongs(json.decode(plRes.body));
+              }
+            } catch (_) {}
+          }
         }
       } catch (e) {
         print('getArtistTopSongs browse notice: $e');
       }
     }
 
-    // Fallback: search "$artistName songs" if browse returned fewer than 5 tracks
-    if (songs.length < 5) {
+    // Fallback: search "$artistName songs" if browse returned fewer than 10 tracks
+    if (songs.length < 10) {
       try {
-        final fallback = await searchSongs('$artistName songs', limit: limit);
+        final fallback = await searchSongs('$artistName official songs', limit: limit);
         for (final s in fallback) {
           final sid = s.youtubeId ?? s.id;
           if (seenIds.add(sid)) {

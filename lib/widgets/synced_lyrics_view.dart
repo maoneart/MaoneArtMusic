@@ -26,16 +26,61 @@ class SyncedLyricsView extends StatefulWidget {
 const double _kLyricLineHeight = 64.0;
 
 class _SyncedLyricsViewState extends State<SyncedLyricsView> {
-  final ScrollController _scrollController = ScrollController();
+  late final ScrollController _scrollController;
   int _lastActiveIndex = -1;
   bool _userIsScrolling = false;
   DateTime _lastUserScrollTime = DateTime.now();
+  bool _hasInitiallyScrolled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final activeIndex = _calculateActiveIndex();
+    final initialOffset = (activeIndex > 0 && widget.lyrics.isNotEmpty)
+        ? (activeIndex * _kLyricLineHeight)
+        : 0.0;
+    _scrollController = ScrollController(initialScrollOffset: initialOffset);
+
+    if (activeIndex >= 0) {
+      _lastActiveIndex = activeIndex;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initialJumpToCurrentLine();
+    });
+  }
 
   @override
   void didUpdateWidget(covariant SyncedLyricsView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.lyrics.isNotEmpty) {
-      _checkAndScrollToActiveLine();
+      if (!_hasInitiallyScrolled) {
+        _initialJumpToCurrentLine();
+      } else {
+        _checkAndScrollToActiveLine();
+      }
+    }
+  }
+
+  void _initialJumpToCurrentLine() {
+    if (!mounted || widget.lyrics.isEmpty) return;
+    final int activeIndex = _calculateActiveIndex();
+    if (activeIndex >= 0 && activeIndex < widget.lyrics.length) {
+      _lastActiveIndex = activeIndex;
+      if (_scrollController.hasClients) {
+        final double targetOffset = (activeIndex * _kLyricLineHeight).clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+        _scrollController.jumpTo(targetOffset);
+        _hasInitiallyScrolled = true;
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && !_hasInitiallyScrolled) {
+            _initialJumpToCurrentLine();
+          }
+        });
+      }
     }
   }
 
@@ -66,7 +111,15 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   }
 
   void _animateScroll(int index) {
-    if (!_scrollController.hasClients || index < 0 || index >= widget.lyrics.length) return;
+    if (index < 0 || index >= widget.lyrics.length) return;
+    if (!_scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController.hasClients) {
+          _animateScroll(index);
+        }
+      });
+      return;
+    }
     final double targetOffset = index * _kLyricLineHeight;
     final double clampedOffset = targetOffset.clamp(
       0.0,

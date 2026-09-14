@@ -173,6 +173,43 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
     }
   }
 
+  Timer? _headsetClickTimer;
+  int _headsetClickCount = 0;
+
+  /// ⚡ Headset & Bluetooth Media Button Handler:
+  /// - 1x klik: Play / Pause toggle
+  /// - 2x klik cepat (dalam 380ms): Skip to Next track (Lagu berikutnya)
+  @override
+  Future<void> click([MediaButton button = MediaButton.media]) async {
+    if (button == MediaButton.next) {
+      await skipToNext();
+      return;
+    }
+    if (button == MediaButton.previous) {
+      await skipToPrevious();
+      return;
+    }
+
+    _headsetClickCount++;
+    if (_headsetClickCount == 1) {
+      _headsetClickTimer?.cancel();
+      _headsetClickTimer = Timer(const Duration(milliseconds: 380), () async {
+        if (_headsetClickCount == 1) {
+          if (_player.playing) {
+            await pause();
+          } else {
+            await play();
+          }
+        }
+        _headsetClickCount = 0;
+      });
+    } else if (_headsetClickCount >= 2) {
+      _headsetClickTimer?.cancel();
+      _headsetClickCount = 0;
+      await skipToNext();
+    }
+  }
+
   void setMediaItem({
     required String id,
     required String title,

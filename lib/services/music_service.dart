@@ -723,11 +723,76 @@ class MusicService {
     }
   }
 
-  /// Fetch real-time Top 10 Charts (10 Distinct, Unique Top Hit Songs with Direct YouTube Audio IDs)
-  Future<List<Song>> getTrendingSongs({String category = 'Trending'}) async {
+  /// Dynamic Daily Rotating & Refreshable Top Charts (Fresh Daily Rotation + Real-Time Live YouTube Charts on Refresh)
+  Future<List<Song>> getTrendingSongs({String category = 'Trending', bool refresh = false}) async {
     List<Song> songs = [];
 
-    final List<String> trendingSeeds = [
+    // 1. Dynamic live queries based on category & daily rotation salt
+    final now = DateTime.now();
+    final int daySeed = now.year * 1000 + now.month * 32 + now.day;
+    final int rotationIndex = refresh ? (now.millisecond + now.second) % 8 : (now.day + now.weekday) % 8;
+
+    final Map<String, List<String>> liveQueryVariations = {
+      'Trending': [
+        'Lagu Trending Indonesia 2026 Hits Terbaru',
+        'Top Hits Indonesia 2026 Viral Terpopuler',
+        'Lagu Viral Terbaru 2026 Bernadya Sal Priadi Mahalini',
+        'Populer Hari Ini Indonesia 2026 YouTube Music',
+        'Tangga Lagu Indonesia 2026 Terpopuler Resmi',
+        'Lagu Hits Indonesia 2026 Pop Akustik',
+        'Top 50 Indonesia 2026 Lagu Viral Terkini',
+        'Hits Indonesia Terbaru 2026 Pilihan Pendengar',
+      ],
+      'Indonesia': [
+        'Top Lagu Pop Indonesia 2026 Terbaru',
+        'Lagu Galau Indonesia 2026 Hits Akustik',
+        'Lagu Populer Indonesia Denny Caknan Hindia Bernadya',
+        'Lagu Indie Pop Indonesia 2026 Viral Terkini',
+        'Lagu Enak Didengar 2026 Indonesia Hits',
+        'Lagu Koplo Pop Jawa 2026 Denny Caknan Happy Asmara',
+        'Lagu Santai Indonesia 2026 Viral Akustik',
+        'Pop Romantis Indonesia 2026 Hits Terbaru',
+      ],
+      'Global': [
+        'Top Global Hits 2026 Billboard Pop Viral',
+        'Today Top Hits 2026 Bruno Mars Billie Eilish',
+        'Global Viral Hits 2026 Sabrina Carpenter Lady Gaga',
+        'Billboard Hot 100 2026 Official Music',
+        'Pop Global Hits 2026 The Weeknd Dua Lipa',
+        'Top English Hits 2026 Trending Music',
+        'Viral Worldwide Songs 2026 New Release',
+        'International Top Charts 2026 Official Video',
+      ],
+      'Viral TikTok': [
+        'Lagu Viral TikTok 2026 FYP Paling Candu Hits',
+        'Sound Viral TikTok 2026 Terbaru Indonesia',
+        'Lagu FYP TikTok 2026 Populer Enak Didengar',
+        'Remix Viral TikTok 2026 Hits Indonesia',
+        'Sound TikTok Indonesia 2026 Candu Banget',
+        'TikTok Trending Music 2026 FYP Terbaru',
+        'Lagu TikTok Santai 2026 Galau Trending',
+        'Kompilasi Sound TikTok Viral 2026 Terbaru',
+      ],
+    };
+
+    final queries = liveQueryVariations[category] ?? liveQueryVariations['Trending']!;
+    final selectedQuery = queries[rotationIndex % queries.length];
+
+    // Try live fast InnerTube search first (Instant single-pass query)
+    try {
+      final liveSongs = await _searchInnerTube(selectedQuery, limit: 16);
+      if (liveSongs.length >= 6) {
+        if (refresh) {
+          liveSongs.shuffle();
+        }
+        return liveSongs.take(12).toList();
+      }
+    } catch (e) {
+      print('Live trending query notice for $selectedQuery: $e');
+    }
+
+    // Curated rich catalog (Rotates systematically by day of year and random salt on refresh)
+    final List<String> curatedTrendingPool = [
       'Bernadya Satu Bulan Official Music Video',
       'Rose Bruno Mars APT Official Music Video',
       'Sal Priadi Gala Bunga Matahari Official Music Video',
@@ -736,59 +801,33 @@ class MusicService {
       'Billie Eilish Birds of a Feather Official Video',
       'Juicy Luicy Lampu Kuning Official Music Video',
       'Sabrina Carpenter Espresso Official Music Video',
-      'Nadhif Basalamah Penjaga Hati Official Music Video',
-      'Tiara Andini Kupu Kupu Official Music Video',
-    ];
-
-    final List<String> indoSeeds = [
-      'Bernadya Satu Bulan Official Music Video',
-      'Sal Priadi Gala Bunga Matahari Official Music Video',
-      'Mahalini Mati Matian Official Music Video',
-      'Juicy Luicy Lampu Kuning Official Music Video',
       'Nadhif Basalamah Penjaga Hati Official Music Video',
       'Tiara Andini Kupu Kupu Official Music Video',
       'Denny Caknan Sigar Official Music Video',
       'Hindia Kita Ke Sana Official Video',
       'Yura Yunita Risalah Hati Official Video',
       'Anggi Marito Kisah Yang Salah Official Video',
-    ];
-
-    final List<String> globalSeeds = [
-      'Rose Bruno Mars APT Official Music Video',
-      'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
-      'Billie Eilish Birds of a Feather Official Video',
-      'Sabrina Carpenter Espresso Official Music Video',
-      'Chappell Roan Good Luck Babe Official Video',
-      'Benson Boone Beautiful Things Official Video',
-      'Post Malone Morgan Wallen I Had Some Help Official Video',
-      'Taylor Swift Fortnight Official Music Video',
-      'The Weeknd Playboi Carti Timeless Official Video',
-      'Dua Lipa Houdini Official Music Video',
-    ];
-
-    final List<String> tiktokSeeds = [
+      'Sheila On 7 Sahabat Sejati Official Audio',
+      'NIKI High School in Jakarta Official Music Video',
+      'Tulus Hati Hati di Jalan Official Music Video',
+      'Dewa 19 Kangen Official Audio',
       'Raim Laode Lesung Pipi Official Video',
       'Juicy Luicy Adrian Khalif Sialan Official Video',
       'Ghea Indrawari Jiwa Yang Bersedih Official Music Video',
-      'Idgitaf Satu Satu Official Music Video',
-      'Nadhif Basalamah Penjaga Hati Official Music Video',
-      'Denny Caknan Wirang Official Music Video',
       'Salma Salsabil Boleh Juga Official Music Video',
       'Feby Putri Fiersa Besari Runtuh Official Video',
       'Nadin Amizah Semua Aku Dirayakan Official Video',
-      'Batubara Bunga Maaf Official Video',
+      'Chappell Roan Good Luck Babe Official Video',
+      'Benson Boone Beautiful Things Official Video',
+      'Taylor Swift Fortnight Official Music Video',
+      'The Weeknd Playboi Carti Timeless Official Video',
+      'Dua Lipa Houdini Official Music Video',
+      'Post Malone Morgan Wallen I Had Some Help Official Video',
     ];
 
-    if (category == 'Indonesia') {
-      songs = await _fetchTopDistinctSongs(indoSeeds, limit: 10);
-    } else if (category == 'Global') {
-      songs = await _fetchTopDistinctSongs(globalSeeds, limit: 10);
-    } else if (category == 'Viral TikTok') {
-      songs = await _fetchTopDistinctSongs(tiktokSeeds, limit: 10);
-    } else {
-      // Default: Top 10 Trending Mix
-      songs = await _fetchTopDistinctSongs(trendingSeeds, limit: 10);
-    }
+    final randomGen = Random(refresh ? DateTime.now().microsecondsSinceEpoch : daySeed);
+    final rotatedPool = List<String>.from(curatedTrendingPool)..shuffle(randomGen);
+    songs = await _fetchTopDistinctSongs(rotatedPool.take(10).toList(), limit: 10);
 
     if (songs.isEmpty) {
       songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 10);

@@ -41,7 +41,7 @@ class MusicStateNotifier extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> fetchTrending({String? category}) async {
+  Future<void> fetchTrending({String? category, bool refresh = false}) async {
     if (category != null) {
       _selectedCategory = category;
     }
@@ -49,9 +49,12 @@ class MusicStateNotifier extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _trendingSongs = await _musicService.getTrendingSongs(category: _selectedCategory);
-      // Pre-fetch stream for top 4 tracks smoothly in background
-      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 4);
+      _trendingSongs = await _musicService.getTrendingSongs(
+        category: _selectedCategory,
+        refresh: refresh,
+      );
+      // Pre-fetch stream for top 3 tracks smoothly in background
+      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 3);
     } catch (e) {
       print('Error fetching trending: $e');
     }

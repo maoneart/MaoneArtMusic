@@ -24,7 +24,7 @@ class HomeScreen extends ConsumerWidget {
         child: RefreshIndicator(
           color: MaoneArtTheme.spotifyGreenBright,
           backgroundColor: MaoneArtTheme.bgDark,
-          onRefresh: () => ref.read(musicProvider).fetchTrending(),
+          onRefresh: () => ref.read(musicProvider).fetchTrending(refresh: true),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: EdgeInsets.only(bottom: isLandscape ? 85 : 150),
@@ -320,7 +320,7 @@ class HomeScreen extends ConsumerWidget {
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                                     ),
-                                    onPressed: () => ref.read(musicProvider).fetchTrending(),
+                                    onPressed: () => ref.read(musicProvider).fetchTrending(refresh: true),
                                     icon: const Icon(Icons.refresh, size: 18, color: Colors.white70),
                                     label: const Text(
                                       "Refresh",

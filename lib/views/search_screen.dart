@@ -143,44 +143,33 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 ),
               ),
 
-            // Quick Category Pills
-            if (_searchController.text.isEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "Jelajahi Genre Populer",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+            // Quick Trending Pills (Single compact horizontal row, doesn't eat vertical screen space)
+            if (_searchController.text.isEmpty)
+              SizedBox(
+                height: 38,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   children: _quickCategories.map((cat) {
-                    return ActionChip(
-                      backgroundColor: Colors.white.withOpacity(0.1),
-                      side: BorderSide(color: Colors.white.withOpacity(0.2)),
-                      label: Text(
-                        cat,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: ActionChip(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        backgroundColor: Colors.white.withOpacity(0.08),
+                        side: BorderSide(color: Colors.white.withOpacity(0.16)),
+                        label: Text(
+                          cat,
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          _triggerSearch(cat);
+                        },
                       ),
-                      onPressed: () {
-                        FocusScope.of(context).unfocus();
-                        _triggerSearch(cat);
-                      },
                     );
                   }).toList(),
                 ),
               ),
-            ],
 
             // Results List
             Expanded(
@@ -192,7 +181,27 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       child: CircularProgressIndicator(color: MaoneArtTheme.primaryCyan),
                     );
                   }
-                  if (musicState.searchResults.isEmpty && _searchController.text.isNotEmpty) {
+                  if (_searchController.text.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_rounded, size: 56, color: Colors.white.withOpacity(0.18)),
+                          const SizedBox(height: 12),
+                          const Text(
+                            "Cari Lagu, Artis, atau Playlist",
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white70),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Ketik di kolom pencarian untuk hasil musik instan",
+                            style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.35)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  if (musicState.searchResults.isEmpty) {
                     return Center(
                       child: Text(
                         "Tidak ada hasil untuk '${_searchController.text}'",

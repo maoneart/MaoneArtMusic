@@ -25,13 +25,27 @@ class SyncedLyricsView extends StatefulWidget {
 
 class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   final ScrollController _scrollController = ScrollController();
+  List<GlobalKey> _lineKeys = [];
   int _lastActiveIndex = -1;
   bool _userIsScrolling = false;
   DateTime _lastUserScrollTime = DateTime.now();
 
   @override
+  void initState() {
+    super.initState();
+    _rebuildKeys();
+  }
+
+  void _rebuildKeys() {
+    _lineKeys = List.generate(widget.lyrics.length, (_) => GlobalKey());
+  }
+
+  @override
   void didUpdateWidget(covariant SyncedLyricsView oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.lyrics.length != _lineKeys.length) {
+      _rebuildKeys();
+    }
     if (widget.lyrics.isNotEmpty) {
       _checkAndScrollToActiveLine();
     }
@@ -44,7 +58,7 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
 
       // Jika user sedang manual scroll dalam 2.5 detik terakhir, tunda auto-scroll
       final isRecentlyScrolled = DateTime.now().difference(_lastUserScrollTime).inMilliseconds < 2500;
-      if (!_userIsScrolling && !isRecentlyScrolled && _scrollController.hasClients && activeIndex >= 0) {
+      if (!_userIsScrolling && !isRecentlyScrolled && activeIndex >= 0 && activeIndex < _lineKeys.length) {
         _animateScroll(activeIndex);
       }
     }
@@ -64,23 +78,19 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   }
 
   void _animateScroll(int index) {
-    if (!_scrollController.hasClients) return;
-
-    // Estimasi tinggi rata-rata baris lirik ~64px
-    const double estimatedLineHeight = 64.0;
-    final double viewportHeight = _scrollController.position.viewportDimension;
-    // Posisikan baris aktif di 35% tinggi layar
-    final double targetOffset = (index * estimatedLineHeight) - (viewportHeight * 0.35);
-    final double clampedOffset = targetOffset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
-
-    _scrollController.animateTo(
-      clampedOffset,
-      duration: const Duration(milliseconds: 450),
-      curve: Curves.easeOutCubic,
-    );
+    if (index < 0 || index >= _lineKeys.length) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final keyContext = _lineKeys[index].currentContext;
+      if (keyContext != null) {
+        Scrollable.ensureVisible(
+          keyContext,
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.5, // ⚡ EXACT VERTICAL CENTER (Selalu Pas di Tengah Layar!)
+        );
+      }
+    });
   }
 
   @override
@@ -139,6 +149,7 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
     }
 
     final int activeIndex = _calculateActiveIndex();
+    final double viewportHeight = MediaQuery.of(context).size.height;
 
     return NotificationListener<UserScrollNotification>(
       onNotification: (notification) {
@@ -148,38 +159,45 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
       },
       child: ListView.builder(
         controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 12),
+        // Vertical padding set to ~45% of viewport height so both line 1 and last line can align perfectly to center
+        padding: EdgeInsets.symmetric(
+          vertical: viewportHeight * 0.42,
+          horizontal: 16,
+        ),
         itemCount: widget.lyrics.length,
         itemBuilder: (context, index) {
           final line = widget.lyrics[index];
           final isActive = index == activeIndex;
           final isPast = index < activeIndex;
+          final key = index < _lineKeys.length ? _lineKeys[index] : null;
 
           return GestureDetector(
+            key: key,
             onTap: () {
               widget.onSeek(line.timestamp);
               _animateScroll(index);
             },
             child: AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-              padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-              margin: const EdgeInsets.symmetric(vertical: 3.0),
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeInOutCubic,
+              padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+              margin: const EdgeInsets.symmetric(vertical: 4.0),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 color: isActive
-                    ? MaoneArtTheme.primaryCyan.withOpacity(0.12)
+                    ? MaoneArtTheme.primaryCyan.withOpacity(0.16)
                     : Colors.transparent,
                 border: isActive
-                    ? Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.35), width: 1)
+                    ? Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.45), width: 1.2)
                     : null,
               ),
               child: Text(
                 line.text,
+                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: isActive ? 20 : 16,
+                  fontSize: isActive ? 22 : 16,
                   fontWeight: isActive ? FontWeight.w900 : FontWeight.w500,
-                  height: 1.4,
+                  height: 1.45,
                   color: isActive
                       ? Colors.white
                       : isPast
@@ -188,8 +206,8 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
                   shadows: isActive
                       ? [
                           Shadow(
-                            color: MaoneArtTheme.primaryCyan.withOpacity(0.8),
-                            blurRadius: 16,
+                            color: MaoneArtTheme.primaryCyan.withOpacity(0.9),
+                            blurRadius: 20,
                           ),
                         ]
                       : null,

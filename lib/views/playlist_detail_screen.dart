@@ -8,6 +8,7 @@ import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
 import '../widgets/song_tile.dart';
 import '../widgets/playlist_picker_modal.dart';
+import '../services/youtube_audio_extractor.dart';
 
 class PlaylistDetailScreen extends ConsumerWidget {
   final Playlist playlist;
@@ -24,6 +25,13 @@ class PlaylistDetailScreen extends ConsumerWidget {
       (p) => p.id == playlist.id,
       orElse: () => playlist,
     );
+
+    // Pre-fetch top 3 lagu dalam playlist di background untuk pemutaran instan 0ms
+    if (currentPlaylist.songs.isNotEmpty) {
+      Future.microtask(() {
+        YoutubeAudioExtractor.preFetchBatch(currentPlaylist.songs, limit: 3);
+      });
+    }
 
     final isLandscape = MediaQuery.of(context).orientation == Orientation.landscape;
 

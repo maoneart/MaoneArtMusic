@@ -23,15 +23,48 @@ class YoutubeAudioExtractor {
     _inFlightRequests.clear();
   }
 
+  /// Pre-warm YouTube disk cache into RAM at app launch
+  static void warmUp() {
+    Future.microtask(() async {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final keys = prefs.getKeys().where((k) => k.startsWith('yt_stream_cache_'));
+        for (final k in keys) {
+          final diskData = prefs.getString(k);
+          if (diskData != null && diskData.isNotEmpty) {
+            try {
+              final Map<String, dynamic> jsonMap = json.decode(diskData);
+              final ts = DateTime.tryParse(jsonMap['ts'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+              if (DateTime.now().difference(ts).inHours < 5) {
+                final List<dynamic> rawUrls = jsonMap['urls'] ?? [];
+                final urls = rawUrls.map((u) => u.toString()).toList();
+                if (urls.isNotEmpty) {
+                  final cacheKey = k.replaceFirst('yt_stream_cache_', '');
+                  _streamCache[cacheKey] = _CachedStream(urls, ts);
+                }
+              }
+            } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
   /// Selects audio stream based on quality preferences (Prioritizing AAC/M4A 140 for 0ms startup)
   static AudioStreamInfo _selectAudioQuality(List<AudioStreamInfo> sources, String quality) {
     if (sources.isEmpty) throw Exception("No audio sources found");
     final sorted = sources.sortByBitrate();
 
     if (quality == 'low') {
-      return sorted.first;
+      return sorted.firstWhere(
+        (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
+        orElse: () => sorted.first,
+      );
     } else if (quality == 'medium') {
-      return sorted[sorted.length ~/ 2];
+      return sorted.firstWhere(
+        (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
+        orElse: () => sorted[sorted.length ~/ 2],
+      );
     } else {
       // High / default: Prefer AAC/M4A (tag 140) which starts instantly on Android ExoPlayer
       return sorted.firstWhere(
@@ -50,12 +83,12 @@ class YoutubeAudioExtractor {
     getAudioStreamCandidateUrls(song, quality: quality).then((_) {}).catchError((_) {});
   }
 
-  /// Batch pre-fetch streams sequentially with delay to avoid choking network bandwidth
-  static void preFetchBatch(List<Song> songs, {String quality = 'high', int limit = 2}) {
+  /// Batch pre-fetch streams sequentially with micro-delay to avoid choking network bandwidth
+  static void preFetchBatch(List<Song> songs, {String quality = 'high', int limit = 4}) {
     int count = 0;
     for (final song in songs) {
       if (count >= limit) break;
-      final delayMs = count * 750;
+      final delayMs = count * 350;
       Future.delayed(Duration(milliseconds: delayMs), () {
         preFetchStreamUrl(song, quality: quality);
       });
@@ -131,31 +164,13 @@ class YoutubeAudioExtractor {
 
       StreamManifest? manifest;
 
-      // ⚡ 1. Musify Ultra-Fast InnerTube Clients (Android Music + iOS, requireWatchPage: false)
-      // Bypasses JS challenge solver & watch page scraping -> streams resolved in ~200-300ms!
+      // ⚡ Direct high-reliability single-pass stream extraction (tanpa delay timeout client rusak)
       try {
-        manifest = await _yt.videos.streamsClient.getManifest(
-          directVideoId,
-          ytClients: [
-            YoutubeApiClient.androidMusic,
-            YoutubeApiClient.ios,
-            YoutubeApiClient.androidVr,
-          ],
-          requireWatchPage: false,
-        ).timeout(const Duration(seconds: 4));
-      } catch (fastErr) {
-        print('Fast InnerTube extraction notice for $directVideoId: $fastErr');
-      }
-
-      // 2. Safe Fallback to standard client if fast clients failed
-      if (manifest == null || manifest.audioOnly.isEmpty) {
-        try {
-          manifest = await _yt.videos.streamsClient
-              .getManifest(directVideoId, requireWatchPage: true)
-              .timeout(const Duration(seconds: 6));
-        } catch (e) {
-          print('Direct manifest fallback extraction notice for $directVideoId: $e');
-        }
+        manifest = await _yt.videos.streamsClient
+            .getManifest(directVideoId)
+            .timeout(const Duration(seconds: 6));
+      } catch (e) {
+        print('Direct manifest extraction notice for $directVideoId: $e');
       }
 
       if (manifest != null && manifest.audioOnly.isNotEmpty) {
@@ -221,22 +236,10 @@ class YoutubeAudioExtractor {
           try {
             StreamManifest? manifest;
             try {
-              manifest = await _yt.videos.streamsClient.getManifest(
-                video.id.value,
-                ytClients: [
-                  YoutubeApiClient.androidMusic,
-                  YoutubeApiClient.ios,
-                  YoutubeApiClient.androidVr,
-                ],
-                requireWatchPage: false,
-              ).timeout(const Duration(seconds: 4));
-            } catch (_) {}
-
-            if (manifest == null || manifest.audioOnly.isEmpty) {
               manifest = await _yt.videos.streamsClient
-                  .getManifest(video.id.value, requireWatchPage: true)
+                  .getManifest(video.id.value)
                   .timeout(const Duration(seconds: 5));
-            }
+            } catch (_) {}
 
             if (manifest != null && manifest.audioOnly.isNotEmpty) {
               final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);

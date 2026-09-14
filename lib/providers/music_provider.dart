@@ -45,8 +45,8 @@ class MusicStateNotifier extends ChangeNotifier {
 
     try {
       _trendingSongs = await _musicService.getTrendingSongs(category: _selectedCategory);
-      // Pre-fetch stream for top track smoothly in background
-      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 2);
+      // Pre-fetch stream for top 4 tracks smoothly in background
+      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 4);
     } catch (e) {
       print('Error fetching trending: $e');
     }
@@ -103,8 +103,8 @@ class MusicStateNotifier extends ChangeNotifier {
       final results = await _musicService.searchSongs(query);
       if (_searchRequestId == reqId) {
         _searchResults = results;
-        // Pre-fetch stream for top search results smoothly without congestion
-        YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 2);
+        // Pre-fetch stream for top 3 search results smoothly without congestion
+        YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 3);
       }
     } catch (e) {
       print('Error searching: $e');

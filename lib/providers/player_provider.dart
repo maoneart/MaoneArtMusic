@@ -222,10 +222,9 @@ class PlayerStateNotifier extends ChangeNotifier {
 
         if (_playRequestId != currentRequestId) return;
 
-        await _player.setAudioSource(audioSource, preload: true);
-        unawaited(_player.play().catchError((e) {
-          print("Offline playback start notice: $e");
-        }));
+        final playFuture = _player.play();
+        await _player.setAudioSource(audioSource, preload: false);
+        await playFuture;
 
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
@@ -272,16 +271,13 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // ⚡ Musify Instant Play Trigger: Set source with preload: true and unawaited play
-          await _player.setAudioSource(audioSource, preload: true);
-          unawaited(_player.play().catchError((e) {
-            print("Playback start notice: $e");
-          }));
+          // ⚡ Musify Instant Play: Aktifkan play() bersamaan agar ExoPlayer langsung bersuara di chunk pertama
+          final playFuture = _player.play();
+          await _player.setAudioSource(audioSource, preload: false);
+          await playFuture;
 
           sourceSet = true;
-
-          // Otomatis simpan ke cache lokal di background untuk pemutaran 0ms berikutnya
-          AudioCacheService.instance.autoCacheStreamInBackground(_currentSong!, streamUrl);
+          _triggerPostPlaybackTasks(_currentSong!, streamUrl: streamUrl);
           break;
         } catch (sourceErr) {
           print("AudioSource load notice for candidate URL: $sourceErr");
@@ -301,9 +297,6 @@ class PlayerStateNotifier extends ChangeNotifier {
       _status = PlayerLoadingStatus.playing;
       _isPlayingOffline = false;
       notifyListeners();
-
-      // 8. Trigger Post-Playback Tasks (Non-blocking: Lyrics, Radio Extension, Next-Song Preload)
-      _triggerPostPlaybackTasks(_currentSong!);
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
       print("Playback error: $e");
@@ -313,26 +306,35 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
   }
 
-  /// Menjalankan tugas latar belakang setelah audio mulai diputar agar tidak memblokir playback
-  void _triggerPostPlaybackTasks(Song song) {
-    // A. Muat lirik tanpa mengganggu bandwidth audio
-    Future.delayed(const Duration(milliseconds: 300), () {
+  /// Menjalankan tugas latar belakang secara bertahap setelah audio mulai diputar agar tidak merebut bandwidth awal
+  void _triggerPostPlaybackTasks(Song song, {String? streamUrl}) {
+    // A. Pre-load URL stream lagu berikutnya segera (setelah 1.5 detik agar tombol Next langsung 0ms)
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (_currentSong?.id == song.id) {
+        _preloadNextTrack();
+      }
+    });
+
+    // B. Muat lirik tanpa mengganggu bandwidth audio awal (setelah 1 detik)
+    Future.delayed(const Duration(milliseconds: 1000), () {
       if (_currentSong?.id == song.id) {
         _loadLyricsAsync(song);
       }
     });
 
-    // B. Perluas antrean dengan lagu-lagu artis & trending agar musik tidak putus-putus
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // C. Otomatis simpan ke cache lokal setelah audio stabil berputar (3.5 detik), tidak berebut bandwidth awal
+    if (streamUrl != null) {
+      Future.delayed(const Duration(milliseconds: 3500), () {
+        if (_currentSong?.id == song.id) {
+          AudioCacheService.instance.autoCacheStreamInBackground(song, streamUrl);
+        }
+      });
+    }
+
+    // D. Perluas antrean dengan lagu-lagu artis & trending di antrean akhir (setelah 4.5 detik)
+    Future.delayed(const Duration(milliseconds: 4500), () {
       if (_currentSong?.id == song.id) {
         _checkAndExtendQueue();
-      }
-    });
-
-    // C. Pre-load lagu berikutnya langsung (Musify standard)
-    Future.microtask(() {
-      if (_currentSong?.id == song.id) {
-        _preloadNextTrack();
       }
     });
   }
@@ -386,7 +388,13 @@ class PlayerStateNotifier extends ChangeNotifier {
   /// Pre-fetch URL stream lagu berikutnya agar transisi antar lagu 0ms (tanpa jeda)
   void _preloadNextTrack() {
     if (_queue.isEmpty) return;
-    final int nextIndex = (_currentIndex + 1) % _queue.length;
+    int nextIndex = (_currentIndex + 1) % _queue.length;
+    if (_isShuffle && _queue.length > 1) {
+      final available = List.generate(_queue.length, (i) => i)..remove(_currentIndex);
+      if (available.isNotEmpty) {
+        nextIndex = available.first;
+      }
+    }
     final nextSong = _queue[nextIndex];
     if (_lastPreloadedSongId == nextSong.id) return;
     _lastPreloadedSongId = nextSong.id;

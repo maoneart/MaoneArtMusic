@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'services/audio_handler.dart';
+import 'services/youtube_audio_extractor.dart';
 import 'theme/maoneart_theme.dart';
 import 'views/home_screen.dart';
 import 'views/search_screen.dart';
@@ -37,6 +38,9 @@ void main() async {
   } catch (e) {
     print("AudioService init error: $e");
   }
+
+  // Pre-warm YouTube extractor and disk cache into RAM
+  YoutubeAudioExtractor.warmUp();
 
   runApp(const ProviderScope(child: MaoneArtMusicApp()));
 }

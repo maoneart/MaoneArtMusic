@@ -23,7 +23,7 @@ class SyncedLyricsView extends StatefulWidget {
   State<SyncedLyricsView> createState() => _SyncedLyricsViewState();
 }
 
-const double _kLyricLineHeight = 64.0;
+const double _kLyricLineHeight = 68.0;
 
 class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   late final ScrollController _scrollController;
@@ -41,10 +41,6 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
         : 0.0;
     _scrollController = ScrollController(initialScrollOffset: initialOffset);
 
-    if (activeIndex >= 0) {
-      _lastActiveIndex = activeIndex;
-    }
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initialJumpToCurrentLine();
     });
@@ -54,7 +50,7 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   void didUpdateWidget(covariant SyncedLyricsView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.lyrics.isNotEmpty) {
-      if (!_hasInitiallyScrolled) {
+      if (!_hasInitiallyScrolled || oldWidget.lyrics.isEmpty) {
         _initialJumpToCurrentLine();
       } else {
         _checkAndScrollToActiveLine();
@@ -67,13 +63,21 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
     final int activeIndex = _calculateActiveIndex();
     if (activeIndex >= 0 && activeIndex < widget.lyrics.length) {
       _lastActiveIndex = activeIndex;
+      final double targetOffset = activeIndex * _kLyricLineHeight;
       if (_scrollController.hasClients) {
-        final double targetOffset = (activeIndex * _kLyricLineHeight).clamp(
-          0.0,
-          _scrollController.position.maxScrollExtent,
-        );
-        _scrollController.jumpTo(targetOffset);
-        _hasInitiallyScrolled = true;
+        final maxScroll = _scrollController.position.maxScrollExtent;
+        if (maxScroll > 0) {
+          final double clampedOffset = targetOffset.clamp(0.0, maxScroll);
+          _scrollController.jumpTo(clampedOffset);
+          _hasInitiallyScrolled = true;
+        } else {
+          _scrollController.jumpTo(targetOffset);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && !_hasInitiallyScrolled) {
+              _initialJumpToCurrentLine();
+            }
+          });
+        }
       } else {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && !_hasInitiallyScrolled) {
@@ -121,10 +125,8 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
       return;
     }
     final double targetOffset = index * _kLyricLineHeight;
-    final double clampedOffset = targetOffset.clamp(
-      0.0,
-      _scrollController.position.maxScrollExtent,
-    );
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    final double clampedOffset = maxScroll > 0 ? targetOffset.clamp(0.0, maxScroll) : targetOffset;
 
     _scrollController.animateTo(
       clampedOffset,
@@ -189,79 +191,85 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
     }
 
     final int activeIndex = _calculateActiveIndex();
-    final double viewportHeight = MediaQuery.of(context).size.height;
-    // Padding vertikal otomatis agar baris pertama hingga terakhir selalu bisa tepat di 50% tengah layar
-    final double topBottomPadding = (viewportHeight / 2) - (_kLyricLineHeight / 2);
 
-    return NotificationListener<UserScrollNotification>(
-      onNotification: (notification) {
-        _userIsScrolling = notification.direction != ScrollDirection.idle;
-        _lastUserScrollTime = DateTime.now();
-        return false;
-      },
-      child: ListView.builder(
-        controller: _scrollController,
-        itemExtent: _kLyricLineHeight,
-        padding: EdgeInsets.symmetric(
-          vertical: topBottomPadding > 0 ? topBottomPadding : 100,
-          horizontal: 16,
-        ),
-        itemCount: widget.lyrics.length,
-        itemBuilder: (context, index) {
-          final line = widget.lyrics[index];
-          final isActive = index == activeIndex;
-          final isPast = index < activeIndex;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Menggunakan constraints.maxHeight aktual dari wadah lirik, BUKAN tinggi layar penuh HP
+        final double containerHeight = constraints.maxHeight;
+        final double topBottomPadding = ((containerHeight / 2) - (_kLyricLineHeight / 2)).clamp(16.0, 500.0);
 
-          return GestureDetector(
-            onTap: () {
-              widget.onSeek(line.timestamp);
-              _animateScroll(index);
-            },
-            child: Container(
-              height: _kLyricLineHeight,
-              alignment: Alignment.center,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 320),
-                curve: Curves.easeInOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: isActive
-                      ? MaoneArtTheme.primaryCyan.withOpacity(0.16)
-                      : Colors.transparent,
-                  border: isActive
-                      ? Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.45), width: 1.2)
-                      : null,
-                ),
-                child: Text(
-                  line.text,
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: isActive ? 21 : 16,
-                    fontWeight: isActive ? FontWeight.w900 : FontWeight.w500,
-                    height: 1.35,
-                    color: isActive
-                        ? Colors.white
-                        : isPast
-                            ? Colors.white.withOpacity(0.35)
-                            : Colors.white.withOpacity(0.65),
-                    shadows: isActive
-                        ? [
-                            Shadow(
-                              color: MaoneArtTheme.primaryCyan.withOpacity(0.9),
-                              blurRadius: 20,
-                            ),
-                          ]
-                        : null,
+        return NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            _userIsScrolling = notification.direction != ScrollDirection.idle;
+            _lastUserScrollTime = DateTime.now();
+            return false;
+          },
+          child: ListView.builder(
+            controller: _scrollController,
+            itemExtent: _kLyricLineHeight,
+            padding: EdgeInsets.symmetric(
+              vertical: topBottomPadding,
+              horizontal: 16,
+            ),
+            itemCount: widget.lyrics.length,
+            itemBuilder: (context, index) {
+              final line = widget.lyrics[index];
+              final isActive = index == activeIndex;
+              final isPast = index < activeIndex;
+
+              return GestureDetector(
+                onTap: () {
+                  widget.onSeek(line.timestamp);
+                  _lastActiveIndex = index;
+                  _animateScroll(index);
+                },
+                child: Container(
+                  height: _kLyricLineHeight,
+                  alignment: Alignment.center,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 320),
+                    curve: Curves.easeInOutCubic,
+                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: isActive
+                          ? MaoneArtTheme.primaryCyan.withOpacity(0.16)
+                          : Colors.transparent,
+                      border: isActive
+                          ? Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.45), width: 1.2)
+                          : null,
+                    ),
+                    child: Text(
+                      line.text,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: isActive ? 21 : 16,
+                        fontWeight: isActive ? FontWeight.w900 : FontWeight.w500,
+                        height: 1.35,
+                        color: isActive
+                            ? Colors.white
+                            : isPast
+                                ? Colors.white.withOpacity(0.35)
+                                : Colors.white.withOpacity(0.65),
+                        shadows: isActive
+                            ? [
+                                Shadow(
+                                  color: MaoneArtTheme.primaryCyan.withOpacity(0.9),
+                                  blurRadius: 20,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 }

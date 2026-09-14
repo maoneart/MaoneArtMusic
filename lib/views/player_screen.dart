@@ -67,6 +67,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ),
                   ],
+                  if (playerState.isKaraokeMode) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: MaoneArtTheme.spotifyGreen.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.6), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.mic, size: 9, color: MaoneArtTheme.spotifyGreenBright),
+                          SizedBox(width: 2),
+                          Text(
+                            "KARAOKE ON",
+                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: MaoneArtTheme.spotifyGreenBright),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               )
             : Column(
@@ -75,7 +97,28 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     "SEDANG DIPUTAR",
                     style: TextStyle(fontSize: 12, letterSpacing: 2, fontWeight: FontWeight.bold),
                   ),
-                  if (playerState.isPlayingOffline)
+                  if (playerState.isKaraokeMode)
+                    Container(
+                      margin: const EdgeInsets.only(top: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: MaoneArtTheme.spotifyGreen.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.6), width: 0.8),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.mic, size: 9, color: MaoneArtTheme.spotifyGreenBright),
+                          SizedBox(width: 2),
+                          Text(
+                            "KARAOKE ON (MINUS-ONE)",
+                            style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: MaoneArtTheme.spotifyGreenBright),
+                          ),
+                        ],
+                      ),
+                    )
+                  else if (playerState.isPlayingOffline)
                     Container(
                       margin: const EdgeInsets.only(top: 2),
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -92,6 +135,42 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 ],
               ),
         actions: [
+          IconButton(
+            icon: playerState.isSearchingKaraoke
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
+                  )
+                : Icon(
+                    playerState.isKaraokeMode ? Icons.mic : Icons.mic_none_outlined,
+                    color: playerState.isKaraokeMode ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
+                    size: isLandscape ? 22 : 24,
+                  ),
+            tooltip: playerState.isKaraokeMode ? "Matikan Karaoke" : "Mode Karaoke (Minus-One)",
+            onPressed: () async {
+              if (!playerState.isKaraokeMode) {
+                setState(() {
+                  _showLyrics = true;
+                  _showQueue = false;
+                });
+              }
+              final success = await ref.read(playerProvider).toggleKaraokeMode();
+              if (!success && context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    backgroundColor: Color(0xFF141927),
+                    behavior: SnackBarBehavior.floating,
+                    content: Text(
+                      "❌ Instrumen minus-one karaoke tidak ditemukan untuk lagu ini.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: Icon(
               Icons.lyrics_outlined,
@@ -204,6 +283,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                     ],
                   ),
                 ),
+
+                // Karaoke Minus-One Button
+                _buildKaraokeButton(playerState),
 
                 // Offline Download Button
                 _buildOfflineDownloadButton(song),
@@ -366,6 +448,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   ],
                 ),
               ),
+              _buildKaraokeButton(playerState),
               _buildOfflineDownloadButton(song),
               _buildStarPlaylistButton(song),
               _buildFavoriteButton(song),
@@ -685,6 +768,48 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   // --- REUSABLE ACTION BUTTONS ---
+  Widget _buildKaraokeButton(PlayerStateNotifier playerState) {
+    return IconButton(
+      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      padding: const EdgeInsets.all(4),
+      icon: playerState.isSearchingKaraoke
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
+            )
+          : Icon(
+              playerState.isKaraokeMode ? Icons.mic : Icons.mic_none_outlined,
+              color: playerState.isKaraokeMode ? MaoneArtTheme.spotifyGreenBright : Colors.white70,
+              size: 24,
+            ),
+      tooltip: playerState.isKaraokeMode ? "Matikan Karaoke" : "Mode Karaoke (Minus-One)",
+      onPressed: () async {
+        if (!playerState.isKaraokeMode) {
+          setState(() {
+            _showLyrics = true;
+            _showQueue = false;
+          });
+        }
+        final success = await ref.read(playerProvider).toggleKaraokeMode();
+        if (!success && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              backgroundColor: Color(0xFF141927),
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                "❌ Instrumen minus-one karaoke tidak ditemukan untuk lagu ini.",
+                style: TextStyle(color: Colors.white),
+              ),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      },
+    );
+  }
+
   Widget _buildOfflineDownloadButton(dynamic song) {
     return Consumer(
       builder: (context, ref, _) {
@@ -829,12 +954,154 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                   ],
                 ],
               ),
-              IconButton(
-                icon: const Icon(Icons.close, color: Colors.white70, size: 20),
-                onPressed: () => setState(() => _showLyrics = false),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Karaoke Mode Toggle Pill
+                  InkWell(
+                    onTap: () async {
+                      final success = await ref.read(playerProvider).toggleKaraokeMode();
+                      if (!success && context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            backgroundColor: Color(0xFF141927),
+                            behavior: SnackBarBehavior.floating,
+                            content: Text(
+                              "❌ Instrumen minus-one tidak ditemukan untuk lagu ini.",
+                              style: TextStyle(color: Colors.white),
+                            ),
+                            duration: Duration(seconds: 3),
+                          ),
+                        );
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: playerState.isKaraokeMode
+                            ? MaoneArtTheme.spotifyGreen.withOpacity(0.25)
+                            : Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: playerState.isKaraokeMode
+                              ? MaoneArtTheme.spotifyGreenBright.withOpacity(0.6)
+                              : Colors.white24,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (playerState.isSearchingKaraoke)
+                            const SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
+                            )
+                          else
+                            Icon(
+                              playerState.isKaraokeMode ? Icons.mic : Icons.mic_none_outlined,
+                              color: playerState.isKaraokeMode
+                                  ? MaoneArtTheme.spotifyGreenBright
+                                  : Colors.white70,
+                              size: 14,
+                            ),
+                          const SizedBox(width: 4),
+                          Text(
+                            playerState.isKaraokeMode ? "Karaoke ON" : "Karaoke",
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: playerState.isKaraokeMode
+                                  ? MaoneArtTheme.spotifyGreenBright
+                                  : Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                    onPressed: () => setState(() => _showLyrics = false),
+                  ),
+                ],
               ),
             ],
           ),
+
+          // Karaoke Active Banner / Searching Status
+          if (playerState.isSearchingKaraoke)
+            Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: MaoneArtTheme.primaryCyan.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.35), width: 0.8),
+              ),
+              child: const Row(
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: MaoneArtTheme.primaryCyan),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      "Mencari instrumen minus-one di YouTube...",
+                      style: TextStyle(fontSize: 11, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (playerState.isKaraokeMode)
+            Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    MaoneArtTheme.spotifyGreen.withOpacity(0.25),
+                    MaoneArtTheme.primaryCyan.withOpacity(0.12),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.5), width: 0.8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.mic, color: MaoneArtTheme.spotifyGreenBright, size: 16),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      "Mode Karaoke (Minus-One)",
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ),
+                  InkWell(
+                    onTap: () => ref.read(playerProvider).toggleKaraokeMode(),
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        "Vokal Asli",
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
           const Divider(color: Colors.white24),
           Expanded(
             child: SyncedLyricsView(

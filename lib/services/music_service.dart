@@ -983,4 +983,224 @@ class MusicService {
     radioSongs.shuffle();
     return radioSongs;
   }
+
+  /// 🎤 Smart Hybrid Karaoke: Cari versi Minus-One / Karaoke Instrumental resmi di YouTube
+  Future<Song?> findKaraokeTrack(Song originalSong) async {
+    final cleanTitle = formatSongTitle(originalSong.title);
+    final cleanArtist = originalSong.artist
+        .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
+        .replaceAll('Various Artists', '')
+        .replaceAll('- Topic', '')
+        .replaceAll('Topic', '')
+        .trim();
+
+    final List<String> searchQueries = [
+      '$cleanTitle $cleanArtist karaoke minus one',
+      '$cleanTitle $cleanArtist karaoke instrumental',
+      '$cleanTitle karaoke tanpa vokal',
+    ];
+
+    final Set<String> seenIds = {
+      if (originalSong.youtubeId != null) originalSong.youtubeId!,
+      originalSong.id.replaceFirst('yt_', ''),
+    };
+    final List<Map<String, dynamic>> rawCandidates = [];
+
+    // 1. Coba cari via InnerTube dengan raw title YouTube asli
+    for (final q in searchQueries) {
+      try {
+        final uri = Uri.parse('https://www.youtube.com/youtubei/v1/search?prettyPrint=false');
+        final payload = json.encode({
+          'context': {
+            'client': {
+              'clientName': 'WEB',
+              'clientVersion': '2.20240401.01.00',
+              'hl': 'id',
+              'gl': 'ID',
+            }
+          },
+          'query': q,
+        });
+
+        final res = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          body: payload,
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+
+          void extractVideos(dynamic obj) {
+            if (rawCandidates.length >= 20) return;
+            if (obj is Map) {
+              Map? v;
+              if (obj.containsKey('videoRenderer')) {
+                v = obj['videoRenderer'] as Map?;
+              } else if (obj.containsKey('compactVideoRenderer')) {
+                v = obj['compactVideoRenderer'] as Map?;
+              }
+
+              if (v != null) {
+                final vid = v['videoId'] as String?;
+                String rawTitle = '';
+                if (v['title'] is Map) {
+                  final runs = v['title']['runs'] as List?;
+                  if (runs != null && runs.isNotEmpty) {
+                    rawTitle = runs[0]['text'] as String? ?? '';
+                  } else if (v['title']['simpleText'] != null) {
+                    rawTitle = v['title']['simpleText'] as String? ?? '';
+                  }
+                }
+
+                String rawOwner = '';
+                if (v['ownerText'] is Map) {
+                  final runs = v['ownerText']['runs'] as List?;
+                  if (runs != null && runs.isNotEmpty) {
+                    rawOwner = runs[0]['text'] as String? ?? '';
+                  }
+                } else if (v['shortBylineText'] is Map) {
+                  final runs = v['shortBylineText']['runs'] as List?;
+                  if (runs != null && runs.isNotEmpty) {
+                    rawOwner = runs[0]['text'] as String? ?? '';
+                  }
+                }
+
+                final lenText = v['lengthText']?['simpleText'] as String? ?? '';
+                final seconds = _parseDuration(lenText);
+                final thumbnails = v['thumbnail']?['thumbnails'] as List? ?? [];
+                final thumb = thumbnails.isNotEmpty
+                    ? (thumbnails.last['url'] as String? ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg')
+                    : 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
+
+                if (vid != null && vid.isNotEmpty && rawTitle.isNotEmpty && seenIds.add(vid)) {
+                  rawCandidates.add({
+                    'id': vid,
+                    'rawTitle': rawTitle,
+                    'author': rawOwner,
+                    'seconds': seconds,
+                    'thumb': thumb,
+                  });
+                }
+              }
+
+              obj.forEach((key, val) => extractVideos(val));
+            } else if (obj is List) {
+              for (final item in obj) {
+                extractVideos(item);
+              }
+            }
+          }
+
+          extractVideos(data);
+        }
+      } catch (_) {}
+
+      if (rawCandidates.length >= 8) break;
+    }
+
+    // 2. Fallback via YoutubeExplode jika InnerTube kosong
+    if (rawCandidates.isEmpty) {
+      for (final q in searchQueries.take(2)) {
+        try {
+          final results = await _yt.search.search(q).timeout(const Duration(seconds: 4));
+          for (final item in results) {
+            final vid = item.id.value;
+            if (seenIds.add(vid)) {
+              rawCandidates.add({
+                'id': vid,
+                'rawTitle': item.title,
+                'author': item.author,
+                'seconds': item.duration?.inSeconds ?? 0,
+                'thumb': item.thumbnails.highResUrl,
+              });
+            }
+          }
+        } catch (_) {}
+        if (rawCandidates.isNotEmpty) break;
+      }
+    }
+
+    if (rawCandidates.isEmpty) return null;
+
+    // 3. Smart Relevance Scoring
+    Map<String, dynamic>? best;
+    double highestScore = -999.0;
+    final origDur = originalSong.durationSeconds;
+    final lowerTitle = cleanTitle.toLowerCase();
+
+    for (final cand in rawCandidates) {
+      double score = 0.0;
+      final rawT = (cand['rawTitle'] as String).toLowerCase();
+      final author = (cand['author'] as String).toLowerCase();
+      final combined = '$rawT $author';
+      final candSec = cand['seconds'] as int;
+
+      // Positive keywords for karaoke/minus-one
+      if (combined.contains('karaoke')) score += 30.0;
+      if (combined.contains('minus one') || combined.contains('minus-one')) score += 25.0;
+      if (combined.contains('instrumental') || combined.contains('instrumen')) score += 20.0;
+      if (combined.contains('tanpa vokal') || combined.contains('no vocal') || combined.contains('backing track')) score += 20.0;
+      if (combined.contains('akustik karaoke') || combined.contains('piano karaoke') || combined.contains('guitar karaoke')) score += 15.0;
+
+      // Check title match
+      final titleWords = lowerTitle.split(RegExp(r'\s+')).where((w) => w.length > 2);
+      for (final w in titleWords) {
+        if (combined.contains(w)) score += 5.0;
+      }
+
+      // Negative keywords (Vocal covers, reaction, etc.)
+      if (combined.contains('vocal cover') || combined.contains('cover vokal') || combined.contains('with vocal') || combined.contains('ada vokal')) {
+        score -= 40.0;
+      }
+      if (combined.contains('official music video') || combined.contains('official video') || combined.contains('official audio')) {
+        if (!combined.contains('karaoke') && !combined.contains('instrumental')) {
+          score -= 30.0;
+        }
+      }
+      if (combined.contains('reaction') || combined.contains('tutorial') || combined.contains('belajar')) {
+        if (!combined.contains('karaoke') && !combined.contains('minus one') && !combined.contains('instrumental')) {
+          score -= 25.0;
+        }
+      }
+
+      // Duration comparison
+      if (origDur > 20 && candSec > 20) {
+        final diff = (candSec - origDur).abs();
+        if (diff <= 15) {
+          score += 15.0;
+        } else if (diff <= 30) {
+          score += 10.0;
+        } else if (diff <= 60) {
+          score += 5.0;
+        } else if (diff > 120) {
+          score -= 15.0;
+        }
+      }
+
+      if (score > highestScore) {
+        highestScore = score;
+        best = cand;
+      }
+    }
+
+    if (best != null && highestScore >= 20.0) {
+      final vid = best['id'] as String;
+      return Song(
+        id: 'yt_$vid',
+        youtubeId: vid,
+        title: '${originalSong.title} (Karaoke)',
+        artist: originalSong.artist,
+        album: 'Minus-One Instrumental',
+        artworkUrl: originalSong.artworkUrl.isNotEmpty ? originalSong.artworkUrl : (best['thumb'] as String),
+        durationSeconds: (best['seconds'] as int) > 0 ? (best['seconds'] as int) : originalSong.durationSeconds,
+        isLive: false,
+      );
+    }
+
+    return null;
+  }
 }

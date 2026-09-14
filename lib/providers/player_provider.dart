@@ -49,6 +49,13 @@ class PlayerStateNotifier extends ChangeNotifier {
   bool _isExtendingQueue = false;
   String? _lastPreloadedSongId;
 
+  // 🎤 Smart Hybrid Karaoke State
+  bool _isKaraokeMode = false;
+  bool _isSearchingKaraoke = false;
+  Song? _originalSongBeforeKaraoke;
+  Song? _karaokeSong;
+  String? _karaokeError;
+
   Song? get currentSong => _currentSong;
   List<Song> get queue => _queue;
   int get currentIndex => _currentIndex;
@@ -66,6 +73,10 @@ class PlayerStateNotifier extends ChangeNotifier {
   bool get isSyncedLyrics => _parsedLyrics.isNotEmpty;
   bool get isLoadingLyrics => _isLoadingLyrics;
   bool get isPlayingOffline => _isPlayingOffline;
+  bool get isKaraokeMode => _isKaraokeMode;
+  bool get isSearchingKaraoke => _isSearchingKaraoke;
+  Song? get karaokeSong => _karaokeSong;
+  String? get karaokeError => _karaokeError;
   AudioPlayer get audioPlayer => _player;
 
   PlayerStateNotifier() {
@@ -205,6 +216,11 @@ class PlayerStateNotifier extends ChangeNotifier {
     _parsedLyrics = [];
     _plainLyrics = null;
     _isPlayingOffline = false;
+    _isKaraokeMode = false;
+    _isSearchingKaraoke = false;
+    _karaokeSong = null;
+    _originalSongBeforeKaraoke = null;
+    _karaokeError = null;
     notifyListeners();
 
     // 4. Save to Recent History in Background (Non-blocking)
@@ -514,6 +530,178 @@ class PlayerStateNotifier extends ChangeNotifier {
       _currentIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
     }
     await playSong(_queue[_currentIndex]);
+  }
+
+  /// 🎤 Smart Hybrid Karaoke Mode: Beralih mulus antara Vokal Asli & Instrumen Minus-One tanpa mengulang posisi lagu
+  Future<bool> toggleKaraokeMode() async {
+    if (_currentSong == null) return false;
+
+    // Jika sedang dalam mode karaoke, kembalikan ke vokal lagu asli
+    if (_isKaraokeMode) {
+      return await _revertToOriginalSong();
+    }
+
+    _isSearchingKaraoke = true;
+    _karaokeError = null;
+    notifyListeners();
+
+    try {
+      final baseSong = _originalSongBeforeKaraoke ?? _currentSong!;
+      Song? targetKaraoke = _karaokeSong;
+
+      // Cari trek karaoke YouTube jika belum tersimpan
+      if (targetKaraoke == null || targetKaraoke.id == baseSong.id) {
+        targetKaraoke = await _musicService.findKaraokeTrack(baseSong);
+      }
+
+      if (targetKaraoke == null) {
+        _isSearchingKaraoke = false;
+        _karaokeError = "Instrumen karaoke minus-one tidak ditemukan untuk lagu ini.";
+        notifyListeners();
+        return false;
+      }
+
+      _karaokeSong = targetKaraoke;
+      _originalSongBeforeKaraoke = baseSong;
+
+      // Ambil stream URLs untuk instrumen karaoke
+      final streamUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(
+        targetKaraoke,
+        quality: _audioQuality,
+      ).timeout(const Duration(seconds: 9));
+
+      if (streamUrls.isEmpty) {
+        _isSearchingKaraoke = false;
+        _karaokeError = "Gagal memuat stream audio instrumen.";
+        notifyListeners();
+        return false;
+      }
+
+      final currentPos = _player.position;
+      final wasPlaying = _player.playing;
+
+      bool sourceSet = false;
+      for (final url in streamUrls) {
+        try {
+          final audioSource = AudioSource.uri(
+            Uri.parse(url),
+            tag: MediaItem(
+              id: baseSong.id,
+              title: "${baseSong.title} (Karaoke)",
+              artist: baseSong.artist,
+              album: "Minus-One Instrumental",
+              artUri: Uri.tryParse(baseSong.artworkUrl),
+              duration: Duration(seconds: baseSong.durationSeconds),
+            ),
+          );
+
+          await _player.setAudioSource(audioSource, initialPosition: currentPos);
+          if (wasPlaying) {
+            await _player.play();
+          }
+          sourceSet = true;
+          break;
+        } catch (e) {
+          print("Karaoke audio source switch notice: $e");
+          continue;
+        }
+      }
+
+      if (!sourceSet) {
+        _isSearchingKaraoke = false;
+        _karaokeError = "Gagal memutar audio instrumen karaoke.";
+        notifyListeners();
+        return false;
+      }
+
+      _isKaraokeMode = true;
+      _isSearchingKaraoke = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print("Karaoke toggle notice: $e");
+      _isSearchingKaraoke = false;
+      _karaokeError = "Gagal mengaktifkan mode karaoke.";
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Mengembalikan audio ke trek vokal asli pada detik yang sama
+  Future<bool> _revertToOriginalSong() async {
+    final baseSong = _originalSongBeforeKaraoke ?? _currentSong;
+    if (baseSong == null) {
+      _isKaraokeMode = false;
+      notifyListeners();
+      return true;
+    }
+
+    _isSearchingKaraoke = true;
+    notifyListeners();
+
+    try {
+      final currentPos = _player.position;
+      final wasPlaying = _player.playing;
+
+      // 1. Cek dulu apakah lagu asli ada di cache offline
+      bool sourceLoaded = false;
+      final localPath = await AudioCacheService.instance.getLocalAudioPath(baseSong);
+      if (localPath != null && await File(localPath).exists()) {
+        try {
+          final audioSource = AudioSource.file(
+            localPath,
+            tag: MediaItem(
+              id: baseSong.id,
+              title: baseSong.title,
+              artist: baseSong.artist,
+              album: baseSong.album,
+              artUri: Uri.tryParse(baseSong.artworkUrl),
+              duration: Duration(seconds: baseSong.durationSeconds),
+            ),
+          );
+          await _player.setAudioSource(audioSource, initialPosition: currentPos);
+          if (wasPlaying) await _player.play();
+          sourceLoaded = true;
+        } catch (_) {}
+      }
+
+      // 2. Jika bukan offline atau gagal, stream audio vokal asli
+      if (!sourceLoaded) {
+        final urls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(baseSong, quality: _audioQuality);
+        for (final url in urls) {
+          try {
+            final audioSource = AudioSource.uri(
+              Uri.parse(url),
+              tag: MediaItem(
+                id: baseSong.id,
+                title: baseSong.title,
+                artist: baseSong.artist,
+                album: baseSong.album,
+                artUri: Uri.tryParse(baseSong.artworkUrl),
+                duration: Duration(seconds: baseSong.durationSeconds),
+              ),
+            );
+            await _player.setAudioSource(audioSource, initialPosition: currentPos);
+            if (wasPlaying) await _player.play();
+            sourceLoaded = true;
+            break;
+          } catch (_) {
+            continue;
+          }
+        }
+      }
+
+      _isKaraokeMode = false;
+      _isSearchingKaraoke = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print("Revert to original song notice: $e");
+      _isKaraokeMode = false;
+      _isSearchingKaraoke = false;
+      notifyListeners();
+      return false;
+    }
   }
 
   @override

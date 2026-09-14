@@ -136,7 +136,7 @@ class YoutubeAudioExtractor {
       try {
         manifest = await _yt.videos.streamsClient.getManifest(
           directVideoId,
-          ytClients: const [
+          ytClients: [
             YoutubeApiClient.androidMusic,
             YoutubeApiClient.ios,
             YoutubeApiClient.androidVr,
@@ -223,7 +223,7 @@ class YoutubeAudioExtractor {
             try {
               manifest = await _yt.videos.streamsClient.getManifest(
                 video.id.value,
-                ytClients: const [
+                ytClients: [
                   YoutubeApiClient.androidMusic,
                   YoutubeApiClient.ios,
                   YoutubeApiClient.androidVr,

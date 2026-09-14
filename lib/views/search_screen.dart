@@ -8,6 +8,8 @@ import '../widgets/glass_container.dart';
 import '../widgets/song_tile.dart';
 import '../widgets/playlist_picker_modal.dart';
 import '../models/song.dart';
+import '../models/artist.dart';
+import '../widgets/artist_bar.dart';
 import 'player_screen.dart';
 
 class SearchScreen extends ConsumerStatefulWidget {
@@ -198,15 +200,76 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     );
                   }
                   return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 1. Musify Artist Spotlight Section (Di Atas)
+                      if (musicState.searchedArtists.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                          child: Row(
+                            children: [
+                              Icon(Icons.person_outline_rounded, color: MaoneArtTheme.spotifyGreenBright, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                "Artis",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ...musicState.searchedArtists.take(2).map((artist) => ArtistBar(
+                          artist: artist,
+                          onTap: () {
+                            ref.read(musicProvider).selectArtist(artist);
+                          },
+                          onPlayTap: () async {
+                            await ref.read(musicProvider).selectArtist(artist);
+                            final songs = ref.read(musicProvider).searchResults;
+                            if (songs.isNotEmpty) {
+                              ref.read(playerProvider).playSong(
+                                    songs.first,
+                                    newQueue: songs,
+                                    index: 0,
+                                  );
+                              Navigator.of(context).push(
+                                MaterialPageRoute(builder: (context) => const PlayerScreen()),
+                              );
+                            }
+                          },
+                        )),
+                        const SizedBox(height: 6),
+                      ],
+
+                      // 2. Musify Popular Songs Section (Di Bawah)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              "${musicState.searchResults.length} Lagu Ditemukan",
-                              style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600),
+                            Row(
+                              children: [
+                                const Icon(Icons.music_note_rounded, color: MaoneArtTheme.primaryCyan, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  musicState.selectedArtist != null
+                                      ? "Lagu Populer ${musicState.selectedArtist!.name}"
+                                      : "Lagu Terpopuler",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  "(${musicState.searchResults.length})",
+                                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                                ),
+                              ],
                             ),
                             InkWell(
                               borderRadius: BorderRadius.circular(20),
@@ -234,7 +297,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                                     Icon(Icons.shuffle, size: 14, color: MaoneArtTheme.spotifyGreenBright),
                                     SizedBox(width: 6),
                                     Text(
-                                      "Putar Acak Artis",
+                                      "Putar Acak",
                                       style: TextStyle(
                                         color: MaoneArtTheme.spotifyGreenBright,
                                         fontSize: 11,

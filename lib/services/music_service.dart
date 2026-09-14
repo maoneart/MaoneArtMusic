@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
+import '../models/artist.dart';
 
 const String _noiseTerms =
     'official music video|official lyric video|official lyrics video|'
@@ -372,6 +373,210 @@ class MusicService {
     }
 
     return songList;
+  }
+
+  /// Musify-Style Official YouTube Music Canonical Artist Search
+  Future<List<Artist>> searchArtists(String query) async {
+    final cleanQuery = query.replaceAll('*', '').trim();
+    if (cleanQuery.isEmpty) return [];
+
+    final List<Artist> artists = [];
+    final Set<String> seenIds = {};
+
+    try {
+      final uri = Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false');
+      final payload = json.encode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240401.01.00',
+            'hl': 'id',
+            'gl': 'ID',
+          }
+        },
+        'query': cleanQuery,
+        'params': 'EgWKAQIgAWoMEA4QChADEAQQCRAF', // Musify canonical artist filter
+      });
+
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 4));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+
+        void extractArtists(dynamic obj) {
+          if (artists.length >= 6) return;
+          if (obj is Map) {
+            if (obj.containsKey('musicResponsiveListItemRenderer')) {
+              final r = obj['musicResponsiveListItemRenderer'] as Map;
+              final nav = r['navigationEndpoint']?['browseEndpoint'];
+              final browseId = nav?['browseId'] as String?;
+              if (browseId != null && browseId.isNotEmpty && seenIds.add(browseId)) {
+                final flexCols = r['flexColumns'] as List? ?? [];
+                String name = '';
+                String subtitle = 'Artis Resmi';
+
+                if (flexCols.isNotEmpty) {
+                  final runs = flexCols[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+                  if (runs != null && runs.isNotEmpty) {
+                    name = runs[0]['text'] as String? ?? '';
+                  }
+                }
+                if (flexCols.length > 1) {
+                  final runs = flexCols[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+                  if (runs != null && runs.isNotEmpty) {
+                    subtitle = runs.map((e) => e['text'] ?? '').join('');
+                  }
+                }
+
+                final thumbList = r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List? ?? [];
+                String? thumbUrl;
+                if (thumbList.isNotEmpty) {
+                  thumbUrl = thumbList.last['url'] as String?;
+                }
+
+                if (name.isNotEmpty) {
+                  artists.add(Artist(
+                    id: browseId,
+                    name: name,
+                    avatarUrl: thumbUrl,
+                    subtitle: subtitle.isNotEmpty ? subtitle : 'Artis Resmi',
+                    isVerified: true,
+                  ));
+                }
+              }
+            } else {
+              for (final val in obj.values) {
+                extractArtists(val);
+              }
+            }
+          } else if (obj is List) {
+            for (final item in obj) {
+              extractArtists(item);
+            }
+          }
+        }
+
+        extractArtists(data);
+      }
+    } catch (e) {
+      print('YouTube Music searchArtists notice: $e');
+    }
+
+    return artists;
+  }
+
+  /// Fetches canonical top popular songs for a resolved artist browseId (Musify standard)
+  Future<List<Song>> getArtistTopSongs(String browseId, String artistName, {int limit = 30}) async {
+    final List<Song> songs = [];
+    final Set<String> seenIds = {};
+
+    if (browseId.isNotEmpty) {
+      try {
+        final uri = Uri.parse('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false');
+        final payload = json.encode({
+          'context': {
+            'client': {
+              'clientName': 'WEB_REMIX',
+              'clientVersion': '1.20240401.01.00',
+              'hl': 'id',
+              'gl': 'ID',
+            }
+          },
+          'browseId': browseId,
+        });
+
+        final res = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+          body: payload,
+        ).timeout(const Duration(seconds: 4));
+
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+
+          void extractSongs(dynamic obj) {
+            if (songs.length >= limit) return;
+            if (obj is Map) {
+              if (obj.containsKey('musicResponsiveListItemRenderer')) {
+                final r = obj['musicResponsiveListItemRenderer'] as Map;
+                final vid = r['playlistItemData']?['videoId'] as String?;
+                if (vid != null && vid.isNotEmpty && seenIds.add(vid)) {
+                  final flexCols = r['flexColumns'] as List? ?? [];
+                  String title = '';
+                  String songArtist = artistName;
+
+                  if (flexCols.isNotEmpty) {
+                    final runs = flexCols[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+                    if (runs != null && runs.isNotEmpty) {
+                      title = runs[0]['text'] as String? ?? '';
+                    }
+                  }
+                  if (flexCols.length > 1) {
+                    final runs = flexCols[1]?['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List?;
+                    if (runs != null && runs.isNotEmpty) {
+                      songArtist = runs[0]['text'] as String? ?? artistName;
+                    }
+                  }
+
+                  final thumbList = r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List? ?? [];
+                  final thumb = thumbList.isNotEmpty
+                      ? (thumbList.last['url'] as String? ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg')
+                      : 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
+
+                  if (title.isNotEmpty) {
+                    songs.add(Song(
+                      id: 'yt_$vid',
+                      youtubeId: vid,
+                      title: formatSongTitle(title),
+                      artist: songArtist.isNotEmpty ? songArtist : artistName,
+                      album: 'YouTube Music',
+                      artworkUrl: thumb,
+                      durationSeconds: 0,
+                    ));
+                  }
+                }
+              } else {
+                for (final val in obj.values) {
+                  extractSongs(val);
+                }
+              }
+            } else if (obj is List) {
+              for (final item in obj) {
+                extractSongs(item);
+              }
+            }
+          }
+
+          extractSongs(data);
+        }
+      } catch (e) {
+        print('getArtistTopSongs browse notice: $e');
+      }
+    }
+
+    // Fallback: search "$artistName songs" if browse returned fewer than 5 tracks
+    if (songs.length < 5) {
+      try {
+        final fallback = await searchSongs('$artistName songs', limit: limit);
+        for (final s in fallback) {
+          if (seenIds.add(s.youtubeId)) {
+            songs.add(s);
+          }
+        }
+      } catch (_) {}
+    }
+
+    return songs;
   }
 
   /// Fetch songs from a YouTube Playlist ID

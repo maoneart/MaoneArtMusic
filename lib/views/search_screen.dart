@@ -348,8 +348,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                           FocusScope.of(context).unfocus();
                           ref.read(playerProvider).playSong(
                                 song,
-                                newQueue: musicState.searchResults,
-                                index: index,
+                                newQueue: [song],
+                                index: 0,
                               );
                           Navigator.of(context).push(
                             MaterialPageRoute(builder: (context) => const PlayerScreen()),

@@ -363,19 +363,19 @@ class PlayerStateNotifier extends ChangeNotifier {
       });
     }
 
-    // D. Perluas antrean dengan lagu-lagu artis & trending di antrean akhir (setelah 4.5 detik)
-    Future.delayed(const Duration(milliseconds: 4500), () {
+    // D. Perluas antrean dengan lagu-lagu Automix Radio (era, genre & vibe matching) setelah 2.5 detik
+    Future.delayed(const Duration(milliseconds: 2500), () {
       if (_currentSong?.id == song.id) {
         _checkAndExtendQueue();
       }
     });
   }
 
-  /// 🎵 Memperluas antrean otomatis dengan lagu-lagu artis / trending (Endless Radio - Ga Putus-Putus)
+  /// 🎵 Memperluas antrean otomatis dengan lagu-lagu Automix Radio (Spotify-Style Era & Vibe Matching)
   Future<void> _checkAndExtendQueue() async {
     if (_isExtendingQueue || _currentSong == null) return;
 
-    // Jika antrean tersisa 3 lagu atau kurang, otomatis tambahkan lagu-lagu penyanyi/band ini
+    // Jika antrean tersisa 3 lagu atau kurang, otomatis tambahkan lagu-lagu radio yang selaras
     if (_queue.length - _currentIndex <= 3) {
       await _extendArtistRadioQueue(_currentSong!);
     }
@@ -386,10 +386,9 @@ class PlayerStateNotifier extends ChangeNotifier {
     _isExtendingQueue = true;
 
     try {
-      final radioTracks = await _musicService.getArtistRadioSongs(
-        anchorSong.artist,
-        currentSongTitle: anchorSong.title,
-        limit: 15,
+      final radioTracks = await _musicService.getAutomixRadioSongs(
+        anchorSong,
+        limit: 20,
       );
 
       if (radioTracks.isNotEmpty) {
@@ -411,7 +410,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         }
       }
     } catch (e) {
-      print("Artist radio extend notice: $e");
+      print("Automix radio extend notice: $e");
     } finally {
       _isExtendingQueue = false;
     }

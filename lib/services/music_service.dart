@@ -926,6 +926,156 @@ class MusicService {
     return null;
   }
 
+  /// 📻 Spotify / YouTube Music Automix Song Radio:
+  /// Menghasilkan antrean lagu otomatis dari era, genre, dan vibe yang sama persis
+  /// (misal: Peterpan "Ada Apa Denganmu" -> Sheila On 7, Dewa 19, Padi, Ungu, d'Masiv era 2000-an).
+  Future<List<Song>> getAutomixRadioSongs(Song anchorSong, {int limit = 20}) async {
+    final List<Song> automixSongs = [];
+    final Set<String> seenIds = {};
+
+    String? videoId = anchorSong.youtubeId;
+    if (videoId == null || videoId.isEmpty) {
+      if (anchorSong.id.startsWith('yt_')) {
+        videoId = anchorSong.id.replaceFirst('yt_', '');
+      }
+    }
+
+    // Jika videoId belum ada (misal dari Saavn/lokal), cari videoId di YouTube dulu
+    if (videoId == null || videoId.isEmpty) {
+      try {
+        final searchHits = await searchSongs('${anchorSong.title} ${anchorSong.artist}', limit: 3);
+        if (searchHits.isNotEmpty) {
+          final first = searchHits.first;
+          videoId = first.youtubeId ?? (first.id.startsWith('yt_') ? first.id.replaceFirst('yt_', '') : null);
+        }
+      } catch (_) {}
+    }
+
+    if (videoId != null && videoId.isNotEmpty) {
+      try {
+        final uri = Uri.parse('https://music.youtube.com/youtubei/v1/next');
+        final payload = json.encode({
+          'context': {
+            'client': {
+              'clientName': 'WEB_REMIX',
+              'clientVersion': '1.20240501.01.00',
+              'hl': 'id',
+              'gl': 'ID',
+            }
+          },
+          'videoId': videoId,
+          'playlistId': 'RDAMVM$videoId',
+          'isAudioOnly': true,
+        });
+
+        final res = await http.post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://music.youtube.com/',
+          },
+          body: payload,
+        ).timeout(const Duration(seconds: 7));
+
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+
+          void extractRadioVideos(dynamic obj) {
+            if (automixSongs.length >= limit) return;
+            if (obj is Map) {
+              if (obj.containsKey('playlistPanelVideoRenderer')) {
+                final v = obj['playlistPanelVideoRenderer'] as Map?;
+                if (v != null) {
+                  final vid = v['videoId'] as String?;
+                  if (vid != null && vid.isNotEmpty && vid != videoId && seenIds.add(vid)) {
+                    String rawTitle = '';
+                    if (v['title'] is Map) {
+                      final runs = v['title']['runs'] as List?;
+                      if (runs != null && runs.isNotEmpty) {
+                        rawTitle = runs[0]['text'] as String? ?? '';
+                      } else if (v['title']['simpleText'] != null) {
+                        rawTitle = v['title']['simpleText'] as String? ?? '';
+                      }
+                    }
+
+                    String rawArtist = '';
+                    if (v['shortBylineText'] is Map) {
+                      final runs = v['shortBylineText']['runs'] as List?;
+                      if (runs != null && runs.isNotEmpty) {
+                        rawArtist = runs[0]['text'] as String? ?? '';
+                      }
+                    }
+                    if (rawArtist.isEmpty && v['longBylineText'] is Map) {
+                      final runs = v['longBylineText']['runs'] as List?;
+                      if (runs != null && runs.isNotEmpty) {
+                        rawArtist = runs[0]['text'] as String? ?? '';
+                      }
+                    }
+
+                    String lenText = '';
+                    if (v['lengthText'] is Map) {
+                      final runs = v['lengthText']['runs'] as List?;
+                      if (runs != null && runs.isNotEmpty) {
+                        lenText = runs[0]['text'] as String? ?? '';
+                      } else if (v['lengthText']['simpleText'] != null) {
+                        lenText = v['lengthText']['simpleText'] as String? ?? '';
+                      }
+                    }
+
+                    final thumbnails = v['thumbnail']?['thumbnails'] as List? ?? [];
+                    final thumb = thumbnails.isNotEmpty
+                        ? (thumbnails.last['url'] as String? ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg')
+                        : 'https://i.ytimg.com/vi/$vid/hqdefault.jpg';
+
+                    final seconds = _parseDuration(lenText);
+                    final formattedTitle = formatSongTitle(rawTitle);
+
+                    if (rawTitle.isNotEmpty) {
+                      automixSongs.add(Song(
+                        id: 'yt_$vid',
+                        youtubeId: vid,
+                        title: formattedTitle.isNotEmpty ? formattedTitle : rawTitle,
+                        artist: rawArtist.isNotEmpty ? rawArtist : 'Various Artists',
+                        album: 'Automix Radio',
+                        artworkUrl: thumb,
+                        durationSeconds: seconds,
+                        isLive: lenText.toLowerCase().contains('live'),
+                      ));
+                    }
+                  }
+                }
+              } else {
+                for (final val in obj.values) {
+                  extractRadioVideos(val);
+                }
+              }
+            } else if (obj is List) {
+              for (final item in obj) {
+                extractRadioVideos(item);
+              }
+            }
+          }
+
+          extractRadioVideos(data);
+        }
+      } catch (e) {
+        print('Automix radio error: $e');
+      }
+    }
+
+    // 🛡️ Fallback Resilience: jika automix kosong/gagal, ambil lagu radio dari artist
+    if (automixSongs.isEmpty) {
+      return getArtistRadioSongs(
+        anchorSong.artist,
+        currentSongTitle: anchorSong.title,
+        limit: limit,
+      );
+    }
+
+    return automixSongs;
+  }
+
   /// Fetch Artist Radio / Trending tracks for endless continuous playback ("ga putus-putus")
   Future<List<Song>> getArtistRadioSongs(String artist, {String? currentSongTitle, int limit = 15}) async {
     final cleanArtist = artist

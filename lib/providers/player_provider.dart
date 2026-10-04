@@ -116,13 +116,18 @@ class PlayerStateNotifier extends ChangeNotifier {
       final playing = state.playing;
       final processingState = state.processingState;
 
+      // 🛡️ Guard: saat sedang memuat lagu baru, jangan biarkan event transient lama menimpa status loading
+      if (_status == PlayerLoadingStatus.loading && processingState != ProcessingState.ready) {
+        return;
+      }
+
       if (processingState == ProcessingState.completed) {
         _handleTrackCompletion();
       } else if (playing) {
         _status = PlayerLoadingStatus.playing;
       } else if (!playing && processingState != ProcessingState.idle) {
         _status = PlayerLoadingStatus.paused;
-      } else if (processingState == ProcessingState.idle) {
+      } else if (processingState == ProcessingState.idle && _status != PlayerLoadingStatus.loading) {
         _status = PlayerLoadingStatus.idle;
       }
       notifyListeners();
@@ -176,6 +181,11 @@ class PlayerStateNotifier extends ChangeNotifier {
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
+
+    // 🛑 0. Hentikan lagu sebelumnya seketika agar audio bersih, buffer reset, dan bandwidth 100% bebas
+    try {
+      await _player.stop();
+    } catch (_) {}
 
     // 1. Queue Configuration
     if (targetQueue != null && targetQueue.isNotEmpty) {
@@ -291,11 +301,14 @@ class PlayerStateNotifier extends ChangeNotifier {
           );
 
           // ⚡ Musify Method: Streaming langsung tanpa header custom, setAudioSource lalu play
-          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 15));
+          await _player.setAudioSource(audioSource, preload: true).timeout(const Duration(seconds: 15));
           if (_playRequestId != currentRequestId) return;
-          await _player.play();
+          _player.play();
 
           sourceSet = true;
+          _status = PlayerLoadingStatus.playing;
+          _isPlayingOffline = false;
+          notifyListeners();
           _triggerPostPlaybackTasks(_currentSong!, streamUrl: streamUrl);
           break;
         } catch (sourceErr) {

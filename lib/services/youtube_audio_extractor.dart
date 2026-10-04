@@ -167,24 +167,13 @@ class YoutubeAudioExtractor {
 
       StreamManifest? manifest;
 
-      // ⚡ Musify Engine: Direct extraction using androidMusic & ios clients (NO decipher / player.js overhead, ~250ms)
+      // ⚡ Direct Fast Manifest Extraction (Tanpa penundaan ytClients androidMusic yang usang)
       try {
         manifest = await _yt.videos.streamsClient
-            .getManifest(
-              directVideoId,
-              ytClients: [
-                YoutubeApiClient.androidMusic,
-                YoutubeApiClient.ios,
-              ],
-            )
-            .timeout(const Duration(seconds: 4));
+            .getManifest(directVideoId)
+            .timeout(const Duration(seconds: 5));
       } catch (e) {
-        print('Fast ytClients extraction notice for $directVideoId: $e');
-        try {
-          manifest = await _yt.videos.streamsClient
-              .getManifest(directVideoId)
-              .timeout(const Duration(seconds: 5));
-        } catch (_) {}
+        print('Direct manifest extraction notice for $directVideoId: $e');
       }
 
       if (manifest != null && manifest.audioOnly.isNotEmpty) {
@@ -251,21 +240,9 @@ class YoutubeAudioExtractor {
             StreamManifest? manifest;
             try {
               manifest = await _yt.videos.streamsClient
-                  .getManifest(
-                    video.id.value,
-                    ytClients: [
-                      YoutubeApiClient.androidMusic,
-                      YoutubeApiClient.ios,
-                    ],
-                  )
+                  .getManifest(video.id.value)
                   .timeout(const Duration(seconds: 4));
-            } catch (_) {
-              try {
-                manifest = await _yt.videos.streamsClient
-                    .getManifest(video.id.value)
-                    .timeout(const Duration(seconds: 4));
-              } catch (_) {}
-            }
+            } catch (_) {}
 
             if (manifest != null && manifest.audioOnly.isNotEmpty) {
               final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);

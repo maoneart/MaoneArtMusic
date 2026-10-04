@@ -138,9 +138,6 @@ class MusicStateNotifier extends ChangeNotifier {
             ];
           }
         }
-
-        // Pre-fetch stream for top 3 search results smoothly without congestion
-        YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 3);
       }
     } catch (e) {
       print('Error searching: $e');

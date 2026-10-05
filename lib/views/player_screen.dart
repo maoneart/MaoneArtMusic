@@ -310,11 +310,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 38,
-                    color: Colors.black,
-                  ),
+                  child: playerState.isLoading
+                      ? const SizedBox(
+                          width: 26,
+                          height: 26,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                          ),
+                        )
+                      : Icon(
+                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          size: 38,
+                          color: Colors.black,
+                        ),
                 ),
               ),
 
@@ -460,11 +469,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 34,
-                    color: Colors.black,
-                  ),
+                  child: playerState.isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.8,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                          ),
+                        )
+                      : Icon(
+                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          size: 34,
+                          color: Colors.black,
+                        ),
                 ),
               ),
               IconButton(
@@ -643,11 +661,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                       ),
                     ],
                   ),
-                  child: Icon(
-                    playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                    size: 28,
-                    color: Colors.black,
-                  ),
+                  child: playerState.isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                          ),
+                        )
+                      : Icon(
+                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                          size: 28,
+                          color: Colors.black,
+                        ),
                 ),
               ),
               IconButton(

@@ -347,6 +347,9 @@ class PlayerStateNotifier extends ChangeNotifier {
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (_currentSong?.id == song.id) {
         _preloadNextTrack();
+        if (_currentIndex + 1 < _queue.length) {
+          YoutubeAudioExtractor.preFetchBatch(_queue.sublist(_currentIndex + 1), quality: _audioQuality, limit: 3);
+        }
       }
     });
 
@@ -414,10 +417,10 @@ class PlayerStateNotifier extends ChangeNotifier {
           _queue.addAll(toAdd);
           notifyListeners();
 
-          // Segera pre-cache lagu berikutnya begitu antrean automix terisi
+          // Segera pre-cache batch 3 lagu berikutnya begitu antrean automix terisi
           if (_currentIndex + 1 < _queue.length) {
-            final nextSong = _queue[_currentIndex + 1];
-            YoutubeAudioExtractor.preFetchStreamUrl(nextSong, quality: _audioQuality);
+            final nextTracks = _queue.sublist(_currentIndex + 1);
+            YoutubeAudioExtractor.preFetchBatch(nextTracks, quality: _audioQuality, limit: 3);
             _preCacheNextTrack();
           }
         }
@@ -535,6 +538,11 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> togglePlayPause() async {
+    // 🛡️ Click Guard: Jangan interupsi jika pemutar sedang memuat audio baru
+    if (_status == PlayerLoadingStatus.loading) {
+      return;
+    }
+
     if (_player.playing) {
       await pause();
     } else {
@@ -576,6 +584,11 @@ class PlayerStateNotifier extends ChangeNotifier {
           }
         }
       }
+    }
+
+    // Segera picu prefetch batch lagu setelahnya ke RAM
+    if (_currentIndex + 1 < _queue.length) {
+      YoutubeAudioExtractor.preFetchBatch(_queue.sublist(_currentIndex + 1), quality: _audioQuality, limit: 3);
     }
 
     await playSong(_queue[_currentIndex], isAutoTransition: isAuto);

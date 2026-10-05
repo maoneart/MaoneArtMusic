@@ -60,6 +60,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   List<Song> get queue => _queue;
   int get currentIndex => _currentIndex;
   PlayerLoadingStatus get status => _status;
+  bool get isLoading => _status == PlayerLoadingStatus.loading;
   bool get isPlaying => _player.playing || _status == PlayerLoadingStatus.playing;
   Duration get position => _position;
   Duration get duration => _duration;

@@ -248,11 +248,18 @@ class MusicService {
                 final seconds = _parseDuration(lenText);
                 final titleLower = rawTitle.toLowerCase();
 
-                // Skip full album compilations > 30 minutes
-                if (seconds <= 2400 &&
-                    !titleLower.contains('full album') &&
-                    !titleLower.contains('2 jam') &&
-                    !titleLower.contains('3 jam')) {
+                // 🛡️ Strict Anti-Compilation Filter: Hanya izinkan single lagu asli (durasi wajar 1-8 menit)
+                final isCompilation = seconds > 480 || seconds < 60 ||
+                    titleLower.contains('full album') ||
+                    titleLower.contains('kompilasi') ||
+                    titleLower.contains('kumpulan lagu') ||
+                    titleLower.contains('playlist') ||
+                    titleLower.contains('nonstop') ||
+                    titleLower.contains('2 jam') ||
+                    titleLower.contains('3 jam') ||
+                    titleLower.contains('1 jam');
+
+                if (!isCompilation) {
                   final sep = rawTitle.indexOf(' - ');
                   final artist = sep != -1 ? rawTitle.substring(0, sep).trim() : rawOwner;
                   final titlePart = sep != -1 ? rawTitle.substring(sep + 3).trim() : rawTitle;
@@ -724,62 +731,57 @@ class MusicService {
     }
   }
 
-  /// Dynamic Daily Rotating & Refreshable Top Charts (Fresh Daily Rotation + Real-Time Live YouTube Charts on Refresh)
+  /// Dynamic Weekly Rotating & Refreshable Top Charts (Changes automatically every 1 week by weekSeed)
   Future<List<Song>> getTrendingSongs({String category = 'Trending', bool refresh = false}) async {
     List<Song> songs = [];
 
-    // 1. Dynamic live queries based on category & daily rotation salt
+    // 1. Weekly seed calculation: changes automatically every 1 week (Week of Year: 1-52)
     final now = DateTime.now();
-    final int daySeed = now.year * 1000 + now.month * 32 + now.day;
-    final int rotationIndex = refresh ? (now.millisecond + now.second) % 8 : (now.day + now.weekday) % 8;
+    final int dayOfYear = now.difference(DateTime(now.year, 1, 1)).inDays;
+    final int weekOfYear = (dayOfYear / 7).floor() + 1;
+    final int weekSeed = now.year * 100 + weekOfYear;
+    final int rotationIndex = refresh ? (now.millisecond + now.second) % 6 : weekOfYear % 6;
 
+    // 2. Distinct live queries based on category (English for Global, Indonesian for Indo, FYP for TikTok)
     final Map<String, List<String>> liveQueryVariations = {
       'Trending': [
-        'Lagu Trending Indonesia 2026 Hits Terbaru',
-        'Top Hits Indonesia 2026 Viral Terpopuler',
-        'Lagu Viral Terbaru 2026 Bernadya Sal Priadi Mahalini',
-        'Populer Hari Ini Indonesia 2026 YouTube Music',
-        'Tangga Lagu Indonesia 2026 Terpopuler Resmi',
-        'Lagu Hits Indonesia 2026 Pop Akustik',
-        'Top 50 Indonesia 2026 Lagu Viral Terkini',
-        'Hits Indonesia Terbaru 2026 Pilihan Pendengar',
+        'Top Hits Indonesia Global Official Music Video',
+        'Top 100 Songs Billboard YouTube Music Official',
+        'Lagu Populer Indonesia Global Official Single',
+        'Trending Music Video Official Single',
+        'Top Charts Official Music Video Single',
+        'Viral Music Hits Official Single',
       ],
       'Indonesia': [
-        'Top Lagu Pop Indonesia 2026 Terbaru',
-        'Lagu Galau Indonesia 2026 Hits Akustik',
-        'Lagu Populer Indonesia Denny Caknan Hindia Bernadya',
-        'Lagu Indie Pop Indonesia 2026 Viral Terkini',
-        'Lagu Enak Didengar 2026 Indonesia Hits',
-        'Lagu Koplo Pop Jawa 2026 Denny Caknan Happy Asmara',
-        'Lagu Santai Indonesia 2026 Viral Akustik',
-        'Pop Romantis Indonesia 2026 Hits Terbaru',
+        'Lagu Pop Indonesia Terbaru Official Music Video',
+        'Lagu Galau Indonesia Populer Hits Official Single',
+        'Top Lagu Populer Indonesia Bernadya Sal Priadi Mahalini',
+        'Lagu Indie Pop Indonesia Hits Terbaru Official',
+        'Lagu Akustik Indonesia Populer Official Video',
+        'Hits Indonesia Terbaru Pilihan Pendengar Official',
       ],
       'Global': [
-        'Top Global Hits 2026 Billboard Pop Viral',
-        'Today Top Hits 2026 Bruno Mars Billie Eilish',
-        'Global Viral Hits 2026 Sabrina Carpenter Lady Gaga',
-        'Billboard Hot 100 2026 Official Music',
-        'Pop Global Hits 2026 The Weeknd Dua Lipa',
-        'Top English Hits 2026 Trending Music',
-        'Viral Worldwide Songs 2026 New Release',
-        'International Top Charts 2026 Official Video',
+        'Today Top Hits Official Music Video',
+        'Billboard Hot 100 Top Songs Official Music Video',
+        'Global Top 50 Spotify Official Music Video',
+        'Top English Hits Official Music Video',
+        'Best Pop Songs Billboard Official Single',
+        'International Top Hits Music Video Official',
       ],
       'Viral TikTok': [
-        'Lagu Viral TikTok 2026 FYP Paling Candu Hits',
-        'Sound Viral TikTok 2026 Terbaru Indonesia',
-        'Lagu FYP TikTok 2026 Populer Enak Didengar',
-        'Remix Viral TikTok 2026 Hits Indonesia',
-        'Sound TikTok Indonesia 2026 Candu Banget',
-        'TikTok Trending Music 2026 FYP Terbaru',
-        'Lagu TikTok Santai 2026 Galau Trending',
-        'Kompilasi Sound TikTok Viral 2026 Terbaru',
+        'Sound Viral TikTok FYP Official Audio',
+        'Lagu FYP TikTok Viral Hits Official Single',
+        'TikTok Viral Music FYP Terpopuler Official',
+        'Sound TikTok Indonesia Populer Official Single',
+        'Lagu Viral TikTok Paling Candu Official Single',
+        'Remix Viral TikTok FYP Official Audio',
       ],
     };
 
     final queries = liveQueryVariations[category] ?? liveQueryVariations['Trending']!;
     final selectedQuery = queries[rotationIndex % queries.length];
 
-    // Try live fast InnerTube search first (Instant single-pass query)
+    // Try live fast InnerTube search first (with strict anti-compilation filter)
     try {
       final liveSongs = await _searchInnerTube(selectedQuery, limit: 16);
       if (liveSongs.length >= 6) {
@@ -792,46 +794,121 @@ class MusicService {
       print('Live trending query notice for $selectedQuery: $e');
     }
 
-    // Curated rich catalog (Rotates systematically by day of year and random salt on refresh)
-    final List<String> curatedTrendingPool = [
-      'Bernadya Satu Bulan Official Music Video',
-      'Rose Bruno Mars APT Official Music Video',
-      'Sal Priadi Gala Bunga Matahari Official Music Video',
-      'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
-      'Mahalini Mati Matian Official Music Video',
-      'Billie Eilish Birds of a Feather Official Video',
-      'Juicy Luicy Lampu Kuning Official Music Video',
-      'Sabrina Carpenter Espresso Official Music Video',
-      'Nadhif Basalamah Penjaga Hati Official Music Video',
-      'Tiara Andini Kupu Kupu Official Music Video',
-      'Denny Caknan Sigar Official Music Video',
-      'Hindia Kita Ke Sana Official Video',
-      'Yura Yunita Risalah Hati Official Video',
-      'Anggi Marito Kisah Yang Salah Official Video',
-      'Sheila On 7 Sahabat Sejati Official Audio',
-      'NIKI High School in Jakarta Official Music Video',
-      'Tulus Hati Hati di Jalan Official Music Video',
-      'Dewa 19 Kangen Official Audio',
-      'Raim Laode Lesung Pipi Official Video',
-      'Juicy Luicy Adrian Khalif Sialan Official Video',
-      'Ghea Indrawari Jiwa Yang Bersedih Official Music Video',
-      'Salma Salsabil Boleh Juga Official Music Video',
-      'Feby Putri Fiersa Besari Runtuh Official Video',
-      'Nadin Amizah Semua Aku Dirayakan Official Video',
-      'Chappell Roan Good Luck Babe Official Video',
-      'Benson Boone Beautiful Things Official Video',
-      'Taylor Swift Fortnight Official Music Video',
-      'The Weeknd Playboi Carti Timeless Official Video',
-      'Dua Lipa Houdini Official Music Video',
-      'Post Malone Morgan Wallen I Had Some Help Official Video',
-    ];
+    // 3. Dedicated Curated Pools per Category (Rotates systematically every 1 week by weekSeed)
+    final Map<String, List<String>> curatedCategoryPools = {
+      'Indonesia': [
+        'Bernadya Satu Bulan Official Music Video',
+        'Sal Priadi Gala Bunga Matahari Official Music Video',
+        'Mahalini Mati Matian Official Music Video',
+        'Nadhif Basalamah Penjaga Hati Official Music Video',
+        'Juicy Luicy Lampu Kuning Official Music Video',
+        'Anggi Marito Tak Segampang Itu Official Video',
+        'Nadin Amizah Semua Aku Dirayakan Official Video',
+        'Hindia Kita Ke Sana Official Video',
+        'Yura Yunita Risalah Hati Official Video',
+        'Denny Caknan Sigar Official Music Video',
+        'Tulus Hati Hati di Jalan Official Music Video',
+        'Feby Putri Fiersa Besari Runtuh Official Video',
+        'Tiara Andini Kupu Kupu Official Music Video',
+        'Sheila On 7 Dan Official Audio',
+        'Dewa 19 Kangen Official Audio',
+        'Mahalini Sial Official Music Video',
+        'Juicy Luicy Asing Official Music Video',
+        'Bernadya Kata Mereka Ini Berlebihan Official Video',
+        'Salma Salsabil Boleh Juga Official Music Video',
+        'Raim Laode Komang Official Video',
+        'Guyon Waton Sanes Official Music Video',
+        'Denny Caknan Wirang Official Music Video',
+        'For Revenge Serana Official Video',
+        'Idgitaf Satu Satu Official Music Video',
+        'Batas Senja Nanti Kita Seperti Ini Official Video',
+        'Ghea Indrawari Jiwa Yang Bersedih Official Music Video',
+      ],
+      'Global': [
+        'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
+        'Rose Bruno Mars APT Official Music Video',
+        'Billie Eilish Birds of a Feather Official Video',
+        'Sabrina Carpenter Taste Official Music Video',
+        'Sabrina Carpenter Espresso Official Music Video',
+        'Chappell Roan Good Luck Babe Official Video',
+        'Benson Boone Beautiful Things Official Video',
+        'Taylor Swift Cruel Summer Official Audio',
+        'The Weeknd Playboi Carti Timeless Official Video',
+        'Post Malone Morgan Wallen I Had Some Help Official Video',
+        'Dua Lipa Houdini Official Music Video',
+        'Teddy Swims Lose Control Official Music Video',
+        'Coldplay feelslikeimfallinginlove Official Audio',
+        'Ariana Grande we cant be friends Official Video',
+        'Tommy Richman MILLION DOLLAR BABY Official Video',
+        'Djo End of Beginning Official Video',
+        'Gracie Abrams I Love You Im Sorry Official Video',
+        'Shaboozey A Bar Song Tipsy Official Music Video',
+        'Kendrick Lamar Not Like Us Official Music Video',
+        'Hozier Too Sweet Official Lyric Video',
+        'SZA Snooze Official Music Video',
+        'Olivia Rodrigo vampire Official Music Video',
+        'Jung Kook Seven Official Music Video',
+        'Tate McRae Greedy Official Music Video',
+        'New West Those Eyes Official Music Video',
+      ],
+      'Viral TikTok': [
+        'NIKI Take A Chance With Me Official Music Video',
+        'Paul Partohap PS I LOVE YOU Official Video',
+        'Aziz Hedra Somebodys Pleasure Official Video',
+        'Raim Laode Komang Official Video',
+        'Batas Senja Nanti Kita Seperti Ini Official Video',
+        'Idgitaf Satu Satu Official Video',
+        'Bernadya Untungnya Hidup Harus Tetap Berjalan Official Video',
+        'Gildcoustic Nemen Official Music Video',
+        'Guyon Waton Denny Caknan Sanes Official Video',
+        'Happy Asmara Kisinan 2 Official Music Video',
+        'New West Those Eyes Official Music Video',
+        'd4vd Here With Me Official Video',
+        'Stephen Sanchez Until I Found You Official Video',
+        'JVKE golden hour Official Music Video',
+        'Thuy girls like me dont cry Official Video',
+        'FIFTY FIFTY Cupid Official Music Video',
+        'Stacey Ryan Fall In Love Alone Official Video',
+        'Rony Parulian Mengapa Official Music Video',
+        'Masdo Dinda Official Music Video',
+        'Anggi Marito Kisah Yang Salah Official Video',
+      ],
+      'Trending': [
+        'Bernadya Satu Bulan Official Music Video',
+        'Lady Gaga Bruno Mars Die With A Smile Official Music Video',
+        'Sal Priadi Gala Bunga Matahari Official Music Video',
+        'Rose Bruno Mars APT Official Music Video',
+        'Mahalini Mati Matian Official Music Video',
+        'Billie Eilish Birds of a Feather Official Video',
+        'Juicy Luicy Lampu Kuning Official Music Video',
+        'Sabrina Carpenter Espresso Official Music Video',
+        'Nadhif Basalamah Penjaga Hati Official Music Video',
+        'Denny Caknan Sigar Official Music Video',
+        'Hindia Kita Ke Sana Official Video',
+        'Taylor Swift Cruel Summer Official Audio',
+        'Yura Yunita Risalah Hati Official Video',
+        'Benson Boone Beautiful Things Official Video',
+        'Sheila On 7 Dan Official Audio',
+        'Chappell Roan Good Luck Babe Official Video',
+        'Anggi Marito Tak Segampang Itu Official Video',
+        'The Weeknd Playboi Carti Timeless Official Video',
+        'Tulus Hati Hati di Jalan Official Music Video',
+        'Post Malone Morgan Wallen I Had Some Help Official Video',
+      ],
+    };
 
-    final randomGen = Random(refresh ? DateTime.now().microsecondsSinceEpoch : daySeed);
-    final rotatedPool = List<String>.from(curatedTrendingPool)..shuffle(randomGen);
-    songs = await _fetchTopDistinctSongs(rotatedPool.take(10).toList(), limit: 10);
+    final pool = curatedCategoryPools[category] ?? curatedCategoryPools['Trending']!;
+    final randomGen = Random(refresh ? DateTime.now().microsecondsSinceEpoch : weekSeed);
+    final rotatedPool = List<String>.from(pool)..shuffle(randomGen);
+    songs = await _fetchTopDistinctSongs(rotatedPool.take(12).toList(), limit: 12);
 
     if (songs.isEmpty) {
-      songs = await searchSongs('Top Hits Indonesia 2026 Bernadya Sal Priadi Bruno Mars Sabrina Carpenter', limit: 10);
+      final defaultSeed = category == 'Global'
+          ? 'Today Top Hits Bruno Mars Lady Gaga Billie Eilish'
+          : (category == 'Viral TikTok'
+              ? 'Sound Viral TikTok NIKI Raim Laode'
+              : 'Top Hits Indonesia Bernadya Sal Priadi Mahalini');
+      songs = await searchSongs(defaultSeed, limit: 12);
     }
 
     return songs;

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/song.dart';
 import '../models/artist.dart';
+import '../models/album.dart';
 import '../services/music_service.dart';
 import '../services/youtube_audio_extractor.dart';
 
@@ -12,6 +13,7 @@ class MusicStateNotifier extends ChangeNotifier {
   List<Song> _trendingSongs = [];
   List<Song> _searchResults = [];
   List<Artist> _searchedArtists = [];
+  List<Album> _searchedAlbums = [];
   Artist? _selectedArtist;
   List<String> _suggestions = [];
   bool _isLoadingTrending = false;
@@ -24,6 +26,7 @@ class MusicStateNotifier extends ChangeNotifier {
   List<Song> get trendingSongs => _trendingSongs;
   List<Song> get searchResults => _searchResults;
   List<Artist> get searchedArtists => _searchedArtists;
+  List<Album> get searchedAlbums => _searchedAlbums;
   Artist? get selectedArtist => _selectedArtist;
   List<String> get suggestions => _suggestions;
   bool get isLoadingTrending => _isLoadingTrending;
@@ -70,6 +73,7 @@ class MusicStateNotifier extends ChangeNotifier {
     if (query.trim().isEmpty) {
       _searchResults = [];
       _searchedArtists = [];
+      _searchedAlbums = [];
       _selectedArtist = null;
       _suggestions = [];
       _isSearching = false;
@@ -101,6 +105,7 @@ class MusicStateNotifier extends ChangeNotifier {
     if (query.trim().isEmpty) {
       _searchResults = [];
       _searchedArtists = [];
+      _searchedAlbums = [];
       _selectedArtist = null;
       _suggestions = [];
       _isSearching = false;
@@ -112,14 +117,16 @@ class MusicStateNotifier extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Concurrently query official songs and canonical artists (Musify pattern)
+      // Concurrently query official songs, canonical artists, and albums (Musify pattern)
       final songsFuture = _musicService.searchSongs(query);
       final artistsFuture = _musicService.searchArtists(query);
+      final albumsFuture = _musicService.searchAlbums(query);
 
-      final results = await Future.wait([songsFuture, artistsFuture]);
+      final results = await Future.wait([songsFuture, artistsFuture, albumsFuture]);
       if (_searchRequestId == reqId) {
         _searchResults = results[0] as List<Song>;
         _searchedArtists = results[1] as List<Artist>;
+        _searchedAlbums = results[2] as List<Album>;
 
         // Fallback: If artist query returned empty, resolve artist from top song
         if (_searchedArtists.isEmpty && _searchResults.isNotEmpty) {
@@ -153,6 +160,16 @@ class MusicStateNotifier extends ChangeNotifier {
     }
   }
 
+  /// Fetches tracklist for an album or playlist
+  Future<List<Song>> getAlbumTracks(Album album) async {
+    return await _musicService.getAlbumTracks(
+      album.browseId,
+      fallbackArtwork: album.artworkUrl,
+      fallbackAlbumName: album.title,
+      fallbackArtist: album.artist,
+    );
+  }
+
   /// Selects an artist and fetches their canonical popular songs (Musify top tracks)
   Future<void> selectArtist(Artist artist) async {
     _selectedArtist = artist;
@@ -178,6 +195,7 @@ class MusicStateNotifier extends ChangeNotifier {
     _currentQuery = '';
     _searchResults = [];
     _searchedArtists = [];
+    _searchedAlbums = [];
     _selectedArtist = null;
     _suggestions = [];
     _isSearching = false;

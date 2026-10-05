@@ -23,7 +23,7 @@ class SyncedLyricsView extends StatefulWidget {
   State<SyncedLyricsView> createState() => _SyncedLyricsViewState();
 }
 
-const double _kLyricLineHeight = 68.0;
+const double _kLyricLineHeight = 88.0;
 
 class _SyncedLyricsViewState extends State<SyncedLyricsView> {
   late final ScrollController _scrollController;
@@ -216,6 +216,9 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
               final line = widget.lyrics[index];
               final isActive = index == activeIndex;
               final isPast = index < activeIndex;
+              final isLong = line.text.length > 40;
+              final double activeFontSize = isLong ? 18.0 : 21.0;
+              final double inactiveFontSize = isLong ? 14.0 : 16.0;
 
               return GestureDetector(
                 onTap: () {
@@ -229,7 +232,7 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 320),
                     curve: Curves.easeInOutCubic,
-                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                    padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 16.0),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(16),
                       color: isActive
@@ -242,12 +245,12 @@ class _SyncedLyricsViewState extends State<SyncedLyricsView> {
                     child: Text(
                       line.text,
                       textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      maxLines: 3,
+                      overflow: TextOverflow.clip,
                       style: TextStyle(
-                        fontSize: isActive ? 21 : 16,
+                        fontSize: isActive ? activeFontSize : inactiveFontSize,
                         fontWeight: isActive ? FontWeight.w900 : FontWeight.w500,
-                        height: 1.35,
+                        height: 1.3,
                         color: isActive
                             ? Colors.white
                             : isPast

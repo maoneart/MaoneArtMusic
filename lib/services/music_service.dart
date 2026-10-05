@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import '../models/song.dart';
 import '../models/artist.dart';
+import '../models/album.dart';
 
 const String _noiseTerms =
     'official music video|official lyric video|official lyrics video|'
@@ -1429,5 +1430,240 @@ class MusicService {
     }
 
     return null;
+  }
+
+  /// Search official albums and community album playlists via YouTube Music InnerTube
+  Future<List<Album>> searchAlbums(String query, {int limit = 20}) async {
+    final List<Album> albumList = [];
+    final Set<String> seenIds = {};
+
+    try {
+      final uri = Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false');
+      final payload = json.encode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240401.01.00',
+            'hl': 'id',
+            'gl': 'ID',
+          }
+        },
+        'query': query,
+      });
+
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 6));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+
+        void extractAlbums(dynamic obj) {
+          if (albumList.length >= limit) return;
+          if (obj is Map) {
+            if (obj.containsKey('musicResponsiveListItemRenderer')) {
+              final item = obj['musicResponsiveListItemRenderer'] as Map;
+              final flex = item['flexColumns'] as List? ?? [];
+
+              String title = '';
+              String subtitle = '';
+              String browseId = '';
+              String thumb = '';
+
+              final thumbs = item['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List? ?? [];
+              if (thumbs.isNotEmpty) {
+                thumb = thumbs.last['url'] as String? ?? '';
+              }
+
+              if (flex.isNotEmpty) {
+                final runs = flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List? ?? [];
+                if (runs.isNotEmpty) {
+                  title = runs[0]['text'] as String? ?? '';
+                  browseId = runs[0]['navigationEndpoint']?['browseEndpoint']?['browseId'] as String? ?? '';
+                }
+              }
+
+              if (flex.length > 1) {
+                final runs = flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List? ?? [];
+                final parts = runs.map((r) => r['text'] as String? ?? '').where((s) => s != '•' && s != ' • ' && s.trim().isNotEmpty).toList();
+                subtitle = parts.join(' • ');
+              }
+
+              if (browseId.isEmpty) {
+                browseId = item['navigationEndpoint']?['browseEndpoint']?['browseId'] as String? ?? '';
+              }
+
+              final subLower = subtitle.toLowerCase();
+              final isAlbumOrPlaylist = browseId.startsWith('MPRE') ||
+                  browseId.startsWith('VL') ||
+                  subLower.contains('album') ||
+                  subLower.contains('playlist');
+
+              if (browseId.isNotEmpty && title.isNotEmpty && isAlbumOrPlaylist && seenIds.add(browseId)) {
+                String artistName = subtitle;
+                String? releaseYear;
+                if (subLower.contains('album • ') || subLower.contains('playlist • ')) {
+                  final tokens = subtitle.split('•').map((s) => s.trim()).toList();
+                  if (tokens.length >= 2) {
+                    artistName = tokens[1];
+                  }
+                  if (tokens.length >= 3 && RegExp(r'^\d{4}$').hasMatch(tokens.last)) {
+                    releaseYear = tokens.last;
+                  }
+                }
+
+                albumList.add(Album(
+                  id: browseId,
+                  browseId: browseId,
+                  title: title,
+                  artist: artistName.isNotEmpty ? artistName : 'Various Artists',
+                  artworkUrl: thumb.isNotEmpty ? thumb : 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500',
+                  type: subLower.contains('playlist') ? 'Playlist' : 'Album',
+                  year: releaseYear,
+                ));
+              }
+            }
+
+            for (final v in obj.values) {
+              extractAlbums(v);
+            }
+          } else if (obj is List) {
+            for (final item in obj) {
+              extractAlbums(item);
+            }
+          }
+        }
+
+        extractAlbums(data);
+      }
+    } catch (e) {
+      print('Search albums notice: $e');
+    }
+
+    return albumList;
+  }
+
+  /// Fetches tracklist for an album or playlist via YouTube Music browse endpoint
+  Future<List<Song>> getAlbumTracks(
+    String browseId, {
+    String? fallbackArtwork,
+    String? fallbackAlbumName,
+    String? fallbackArtist,
+  }) async {
+    final List<Song> tracks = [];
+    final Set<String> seenIds = {};
+
+    try {
+      final uri = Uri.parse('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false');
+      final payload = json.encode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240401.01.00',
+            'hl': 'id',
+            'gl': 'ID',
+          }
+        },
+        'browseId': browseId,
+      });
+
+      final res = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        body: payload,
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+
+        void extractTracks(dynamic obj) {
+          if (obj is Map) {
+            if (obj.containsKey('musicResponsiveListItemRenderer')) {
+              final item = obj['musicResponsiveListItemRenderer'] as Map;
+              final flex = item['flexColumns'] as List? ?? [];
+
+              String title = '';
+              String artist = fallbackArtist ?? '';
+              String vid = item['playlistItemData']?['videoId'] as String? ?? '';
+              int durationSec = 0;
+
+              if (vid.isEmpty) {
+                final play = item['overlay']?['musicItemThumbnailOverlayRenderer']?['content']?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint'] as Map?;
+                vid = play?['videoId'] as String? ?? '';
+              }
+
+              if (flex.isNotEmpty) {
+                final runs = flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List? ?? [];
+                if (runs.isNotEmpty) {
+                  title = runs[0]['text'] as String? ?? '';
+                  if (vid.isEmpty) {
+                    vid = runs[0]['navigationEndpoint']?['watchEndpoint']?['videoId'] as String? ?? '';
+                  }
+                }
+              }
+
+              if (flex.length > 1) {
+                final runs = flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List? ?? [];
+                if (runs.isNotEmpty) {
+                  final textRuns = runs.map((r) => r['text'] as String? ?? '').where((s) => s != '•' && s != ' • ' && s.trim().isNotEmpty).toList();
+                  if (textRuns.isNotEmpty) {
+                    artist = textRuns.first;
+                  }
+                }
+              }
+
+              final fixedCols = item['fixedColumns'] as List? ?? [];
+              if (fixedCols.isNotEmpty) {
+                final durRuns = fixedCols[0]['musicResponsiveListItemFixedColumnRenderer']?['text']?['runs'] as List? ?? [];
+                if (durRuns.isNotEmpty) {
+                  durationSec = _parseDuration(durRuns[0]['text'] as String? ?? '');
+                }
+              }
+
+              String thumb = fallbackArtwork ?? '';
+              final thumbs = item['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List? ?? [];
+              if (thumbs.isNotEmpty) {
+                thumb = thumbs.last['url'] as String? ?? thumb;
+              }
+
+              if (vid.isNotEmpty && title.isNotEmpty && seenIds.add(vid)) {
+                tracks.add(Song(
+                  id: 'yt_$vid',
+                  youtubeId: vid,
+                  title: formatSongTitle(title),
+                  artist: artist.isNotEmpty ? artist : (fallbackArtist ?? 'Various Artists'),
+                  album: fallbackAlbumName ?? 'Album',
+                  artworkUrl: thumb.isNotEmpty ? thumb : (fallbackArtwork ?? 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'),
+                  durationSeconds: durationSec > 0 ? durationSec : 240,
+                  isLive: false,
+                ));
+              }
+            }
+
+            for (final v in obj.values) {
+              extractTracks(v);
+            }
+          } else if (obj is List) {
+            for (final item in obj) {
+              extractTracks(item);
+            }
+          }
+        }
+
+        extractTracks(data);
+      }
+    } catch (e) {
+      print('Get album tracks notice: $e');
+    }
+
+    return tracks;
   }
 }

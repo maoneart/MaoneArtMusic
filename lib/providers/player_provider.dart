@@ -173,19 +173,22 @@ class PlayerStateNotifier extends ChangeNotifier {
       seek(Duration.zero);
       resume();
     } else {
-      next();
+      next(isAuto: true);
     }
   }
 
   /// ⚡ Musify-style Ultra-Fast Direct Playback Engine with 0ms Cache Support & Endless Queue
-  Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index}) async {
+  Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index, bool isAutoTransition = false}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 🛑 0. Hentikan lagu sebelumnya seketika agar audio bersih, buffer reset, dan bandwidth 100% bebas
-    try {
-      await _player.stop();
-    } catch (_) {}
+    // 🛑 0. Hentikan lagu sebelumnya seketika hanya jika pergantian lagu dipicu manual oleh user.
+    // Jika transisi otomatis (lagu habis), audio player sudah berhenti alami sehingga stop() tidak perlu dipanggil (mencegah delay reset codec)
+    if (!isAutoTransition) {
+      try {
+        await _player.stop();
+      } catch (_) {}
+    }
 
     // 1. Queue Configuration
     if (targetQueue != null && targetQueue.isNotEmpty) {
@@ -369,6 +372,14 @@ class PlayerStateNotifier extends ChangeNotifier {
         _checkAndExtendQueue();
       }
     });
+
+    // E. ⚡ Early Pre-Caching di menit pertama (detik ke-15):
+    // Download lagu berikutnya ke disk cache lokal saat audio sekarang sedang stabil berputar
+    Future.delayed(const Duration(seconds: 15), () {
+      if (_currentSong?.id == song.id) {
+        _preCacheNextTrack();
+      }
+    });
   }
 
   /// 🎵 Memperluas antrean otomatis dengan lagu-lagu Automix Radio (Spotify-Style Era & Vibe Matching)
@@ -403,9 +414,11 @@ class PlayerStateNotifier extends ChangeNotifier {
           _queue.addAll(toAdd);
           notifyListeners();
 
-          // Segera pre-cache lagu berikutnya
+          // Segera pre-cache lagu berikutnya begitu antrean automix terisi
           if (_currentIndex + 1 < _queue.length) {
-            YoutubeAudioExtractor.preFetchStreamUrl(_queue[_currentIndex + 1], quality: _audioQuality);
+            final nextSong = _queue[_currentIndex + 1];
+            YoutubeAudioExtractor.preFetchStreamUrl(nextSong, quality: _audioQuality);
+            _preCacheNextTrack();
           }
         }
       }
@@ -416,7 +429,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
   }
 
-  /// Pre-fetch URL stream lagu berikutnya agar transisi antar lagu 0ms (tanpa jeda)
+  /// Pre-fetch URL stream & background cache lagu berikutnya agar transisi antar lagu 0ms (tanpa jeda)
   void _preloadNextTrack() {
     if (_queue.isEmpty) return;
     int nextIndex = (_currentIndex + 1) % _queue.length;
@@ -431,11 +444,45 @@ class PlayerStateNotifier extends ChangeNotifier {
     _lastPreloadedSongId = nextSong.id;
 
     YoutubeAudioExtractor.preFetchStreamUrl(nextSong, quality: _audioQuality);
+    _preCacheNextTrack();
 
     // Cek juga apakah antrean perlu diperpanjang
     if (_queue.length - _currentIndex <= 3) {
       _checkAndExtendQueue();
     }
+  }
+
+  bool _isPreCachingNextTrack = false;
+
+  /// ⚡ Pre-cache lagu berikutnya ke storage lokal di menit pertama
+  void _preCacheNextTrack() {
+    if (_isPreCachingNextTrack || _queue.isEmpty) return;
+
+    int nextIndex = (_currentIndex + 1) % _queue.length;
+    if (_isShuffle && _queue.length > 1) {
+      final available = List.generate(_queue.length, (i) => i)..remove(_currentIndex);
+      if (available.isNotEmpty) {
+        nextIndex = available.first;
+      }
+    }
+
+    if (nextIndex == _currentIndex || nextIndex >= _queue.length) return;
+    final nextSong = _queue[nextIndex];
+
+    _isPreCachingNextTrack = true;
+    Future.microtask(() async {
+      try {
+        final existing = await AudioCacheService.instance.getLocalAudioPath(nextSong);
+        if (existing == null) {
+          YoutubeAudioExtractor.preFetchStreamUrl(nextSong, quality: _audioQuality);
+          await AudioCacheService.instance.downloadAndSaveSong(nextSong);
+        }
+      } catch (e) {
+        print("Pre-cache next track notice: $e");
+      } finally {
+        _isPreCachingNextTrack = false;
+      }
+    });
   }
 
   void _recordRecentSong(Song song) async {
@@ -507,7 +554,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> next() async {
+  Future<void> next({bool isAuto = false}) async {
     if (_queue.isEmpty) return;
 
     if (_isShuffle) {
@@ -522,7 +569,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         if (_repeatMode == MusicRepeatMode.all) {
           _currentIndex = 0;
         } else {
-          // Endless Radio: Ambil lebih banyak lagu artis jika sudah di ujung antrean!
+          // Endless Radio: Ambil lebih banyak lagu automix jika sudah di ujung antrean!
           await _extendArtistRadioQueue(_currentSong ?? _queue.last);
           if (_currentIndex >= _queue.length) {
             _currentIndex = 0;
@@ -531,7 +578,7 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
     }
 
-    await playSong(_queue[_currentIndex]);
+    await playSong(_queue[_currentIndex], isAutoTransition: isAuto);
   }
 
   Future<void> previous() async {

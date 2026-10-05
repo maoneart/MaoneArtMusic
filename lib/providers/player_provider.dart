@@ -183,12 +183,10 @@ class PlayerStateNotifier extends ChangeNotifier {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 🛑 0. Hentikan lagu sebelumnya seketika hanya jika pergantian lagu dipicu manual oleh user.
-    // Jika transisi otomatis (lagu habis), audio player sudah berhenti alami sehingga stop() tidak perlu dipanggil (mencegah delay reset codec)
-    if (!isAutoTransition) {
-      try {
-        await _player.stop();
-      } catch (_) {}
+    // 🛑 0. Musify Non-Blocking Transition: Jangan matikan (stop) pipeline codec audio.
+    // Cukup pause cepat tanpa await agar transisi ke setAudioSource instan dan mulus
+    if (!isAutoTransition && _player.playing) {
+      _player.pause();
     }
 
     // 1. Queue Configuration
@@ -258,9 +256,9 @@ class PlayerStateNotifier extends ChangeNotifier {
 
         if (_playRequestId != currentRequestId) return;
 
-        await _player.setAudioSource(audioSource);
+        _player.play();
+        await _player.setAudioSource(audioSource, preload: false);
         if (_playRequestId != currentRequestId) return;
-        await _player.play();
 
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
@@ -304,10 +302,10 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // ⚡ Musify Method: Streaming langsung tanpa header custom, setAudioSource lalu play
-          await _player.setAudioSource(audioSource, preload: true).timeout(const Duration(seconds: 15));
-          if (_playRequestId != currentRequestId) return;
+          // ⚡ Musify Method: Segera panggil play() dan setAudioSource tanpa blocking buffer
           _player.play();
+          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 12));
+          if (_playRequestId != currentRequestId) return;
 
           sourceSet = true;
           _status = PlayerLoadingStatus.playing;

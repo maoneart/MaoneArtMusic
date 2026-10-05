@@ -53,8 +53,8 @@ class MusicStateNotifier extends ChangeNotifier {
         category: _selectedCategory,
         refresh: refresh,
       );
-      // Pre-fetch stream for top 3 tracks smoothly in background
-      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 3);
+      // Pre-fetch stream for top 4 tracks smoothly in background
+      YoutubeAudioExtractor.preFetchBatch(_trendingSongs, limit: 4);
     } catch (e) {
       print('Error fetching trending: $e');
     }
@@ -134,9 +134,13 @@ class MusicStateNotifier extends ChangeNotifier {
                 avatarUrl: topSong.artworkUrl,
                 subtitle: 'Artis Populer',
                 isVerified: true,
-              )
+              ),
             ];
           }
+        }
+
+        if (_searchResults.isNotEmpty) {
+          YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 3);
         }
       }
     } catch (e) {

@@ -5,6 +5,7 @@ import '../providers/library_provider.dart';
 import '../theme/maoneart_theme.dart';
 import '../views/player_screen.dart';
 import 'app_artwork.dart';
+import 'neon_visualizer.dart';
 
 class MiniPlayer extends ConsumerWidget {
   const MiniPlayer({Key? key}) : super(key: key);
@@ -97,14 +98,33 @@ class MiniPlayer extends ConsumerWidget {
                               ),
                             ),
                             const SizedBox(height: 2),
-                            Text(
-                              song.artist,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.white.withOpacity(0.65),
-                              ),
+                            Row(
+                              children: [
+                                if (playerState.isPlaying) ...[
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 10,
+                                    child: NeonMiniVisualizerStrip(
+                                      isPlaying: true,
+                                      barCount: 4,
+                                      height: 10,
+                                      glowColor: MaoneArtTheme.primaryCyan,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 5),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    song.artist,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white.withOpacity(0.65),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

@@ -31,15 +31,16 @@
   - Backup kunci disimpan persisten di `~/.keystore_backup/upload-keystore.jks`.
   - Versi aplikasi dinaikkan ke `v1.0.1+2` di `pubspec.yaml`.
 
-### 🎛️ Fix Buffering & Native System EQ Intent (13 Oktober 2026)
-- **Problem**:
-  - `AudioPipeline(androidAudioEffects: [AndroidEqualizer])` memicu audio sink buffer underrun di ExoPlayer sehingga terjadi infinite buffering.
-  - Panggilan IPC platform channel tanpa throttling di `FutureBuilder` menyebabkan UI freeze/tidak responsif saat klik.
-- **Solusi (Opsi 2)**:
-  - Melepas `AudioPipeline` dari `MyAudioHandler` & `_localPlayer` mengembalikan performa turbo ExoPlayer (zero buffering, instan).
-  - Implementasi `MethodChannel("com.maoneart.music/equalizer")` di `MainActivity.kt` untuk membuka hardware Equalizer bawaan HP (Dolby Atmos / Mi Sound / SoundAlive) via Android Intent (`ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL`).
-  - Efek audio in-app super mulus (0ms blocking): Kontrol Kecepatan Putar (0.75x–1.5x) dan Volume Output Slider.
-  - Modal UI Glassmorphism simetris 2-kolom sesuai standar MaoneArt.
+### ⚡ Neon Audio Visualizer Engine (13 Oktober 2026)
+- **Problem**: Pengguna menanyakan keberadaan fitur Neon Visualizer yang belum tersedia di pemutar musik.
+- **Solusi**:
+  - Dibuat komponen visualizer reaktif performa tinggi `lib/widgets/neon_visualizer.dart` (60 FPS `CustomPainter` tanpa butuh izin sensitif mikrofon `RECORD_AUDIO`).
+  - Menyediakan 3 mode visualizer neon:
+    1. **Cyber Spectrum Bars**: 24 bar equalizer vertikal dengan harmonic frequency weighting, peak meter dots mengambang, dan cermin refleksi air bawah.
+    2. **Fluid Neon Waves**: Multi-layer gelombang sinus glowing (Cyan, Purple, Lime) dengan Gaussian window damping.
+    3. **Circular Orbit Pulse**: Cincin gelombang melingkar dan radial energy spokes di sekitar thumbnail album.
+  - Integrasi tombol toggle visualizer di AppBar `PlayerScreen` (`Icons.graphic_eq_rounded`), ambient mini visualizer strip di bawah artwork, serta indikator mini visualizer 4-bar di `MiniPlayer`.
+  - Versi aplikasi dinaikkan ke `v1.0.2+3` di `pubspec.yaml`.
 
 ---
 

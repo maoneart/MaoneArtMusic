@@ -11,6 +11,7 @@ import '../widgets/app_artwork.dart';
 import '../widgets/playlist_picker_modal.dart';
 import '../widgets/synced_lyrics_view.dart';
 import '../widgets/equalizer_modal.dart';
+import '../widgets/neon_visualizer.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -22,6 +23,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   bool _showLyrics = false;
   bool _showQueue = false;
+  bool _showVisualizer = false;
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +140,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         actions: [
           IconButton(
             icon: Icon(
+              Icons.graphic_eq_rounded,
+              color: _showVisualizer ? MaoneArtTheme.primaryCyan : Colors.white70,
+              size: isLandscape ? 22 : 24,
+            ),
+            tooltip: "Neon Visualizer",
+            onPressed: () {
+              setState(() {
+                _showVisualizer = !_showVisualizer;
+                _showLyrics = false;
+                _showQueue = false;
+              });
+            },
+          ),
+          IconButton(
+            icon: Icon(
               Icons.tune_rounded,
               color: playerState.isEqualizerEnabled ? MaoneArtTheme.primaryCyan : Colors.white70,
               size: isLandscape ? 22 : 24,
@@ -156,6 +173,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               setState(() {
                 _showLyrics = !_showLyrics;
                 _showQueue = false;
+                _showVisualizer = false;
               });
             },
           ),
@@ -170,6 +188,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
               setState(() {
                 _showQueue = !_showQueue;
                 _showLyrics = false;
+                _showVisualizer = false;
               });
             },
           ),
@@ -214,11 +233,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       child: Column(
         children: [
           Expanded(
-            child: _showLyrics
-                ? _buildLyricsView(playerState)
-                : _showQueue
-                    ? _buildQueueView(playerState)
-                    : _buildMainArtwork(context, song),
+            child: _showVisualizer
+                ? _buildVisualizerView(context, playerState, song)
+                : _showLyrics
+                    ? _buildLyricsView(playerState)
+                    : _showQueue
+                        ? _buildQueueView(playerState)
+                        : _buildMainArtwork(context, song),
           ),
 
           const SizedBox(height: 12),
@@ -370,7 +391,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           // Left Column
           Expanded(
             flex: 5,
-            child: _showLyrics || _showQueue
+            child: _showLyrics || _showQueue || _showVisualizer
                 ? _buildLandscapeMiniControls(context, playerState, song)
                 : _buildLandscapeMainArtwork(context, song),
           ),
@@ -378,11 +399,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           // Right Column
           Expanded(
             flex: 6,
-            child: _showLyrics
-                ? _buildLyricsView(playerState)
-                : _showQueue
-                    ? _buildQueueView(playerState)
-                    : _buildLandscapeControlsPanel(context, playerState, song),
+            child: _showVisualizer
+                ? _buildVisualizerView(context, playerState, song)
+                : _showLyrics
+                    ? _buildLyricsView(playerState)
+                    : _showQueue
+                        ? _buildQueueView(playerState)
+                        : _buildLandscapeControlsPanel(context, playerState, song),
           ),
         ],
       ),
@@ -851,29 +874,56 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   Widget _buildMainArtwork(BuildContext context, dynamic song) {
+    final playerState = ref.watch(playerProvider);
+    final artworkWidth = MediaQuery.of(context).size.width * 0.74;
+
     return Center(
-      child: Hero(
-        tag: 'player_artwork',
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
-                blurRadius: 30,
-                spreadRadius: 5,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Hero(
+            tag: 'player_artwork',
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
+                    blurRadius: 30,
+                    spreadRadius: 5,
+                  ),
+                ],
               ),
-            ],
+              child: AppArtwork(
+                artworkUrl: song.artworkUrl,
+                width: artworkWidth,
+                height: artworkWidth,
+                borderRadius: 24,
+                iconSize: 80,
+              ),
+            ),
           ),
-          child: AppArtwork(
-            artworkUrl: song.artworkUrl,
-            width: MediaQuery.of(context).size.width * 0.76,
-            height: MediaQuery.of(context).size.width * 0.76,
-            borderRadius: 24,
-            iconSize: 80,
+          const SizedBox(height: 12),
+          // Ambient Neon Visualizer Strip beneath artwork
+          SizedBox(
+            width: artworkWidth,
+            height: 22,
+            child: NeonMiniVisualizerStrip(
+              isPlaying: playerState.isPlaying,
+              barCount: 22,
+              height: 22,
+              glowColor: MaoneArtTheme.primaryCyan,
+            ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildVisualizerView(BuildContext context, PlayerStateNotifier playerState, dynamic song) {
+    return NeonVisualizerDeck(
+      isPlaying: playerState.isPlaying,
+      song: song,
     );
   }
 

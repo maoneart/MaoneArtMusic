@@ -1,17 +1,19 @@
 # 🎵 MaoneArt Music (Glassmorphic Music Streaming App)
 
 [![GitHub Release](https://img.shields.io/github/v/release/maoneart/MaoneArtMusic?color=00F0FF&label=Latest%20Release&logo=github)](https://github.com/maoneart/MaoneArtMusic/releases/latest)
-[![Download APK](https://img.shields.io/badge/Download-APK%20(v1.0.1)-1ED760?logo=android&logoColor=white)](https://github.com/maoneart/MaoneArtMusic/releases/latest)
+[![Download APK](https://img.shields.io/badge/Download-APK%20(v1.0.2)-1ED760?logo=android&logoColor=white)](https://github.com/maoneart/MaoneArtMusic/releases/latest)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/maoneart/MaoneArtMusic/build_apk.yml?branch=main&label=Build%20APK&logo=github-actions)](https://github.com/maoneart/MaoneArtMusic/actions)
 
 Aplikasi streaming musik open-source berbasis **Flutter** dengan tampilan **MaoneArt Glassmorphic UI**, integrasi katalog YouTube Music tanpa iklan, audio streaming turbo instan tanpa buffering, serta hardware equalizer HP bawaan.
 
 ---
 
-> 🚀 **Pembaruan Terbaru: v1.0.1 Telah Tersedia di GitHub Releases!**  
-> 📥 **[Download MaoneArtMusic.apk (v1.0.1)](https://github.com/maoneart/MaoneArtMusic/releases/latest)**  
+> 🚀 **Pembaruan Terbaru: v1.0.2 Telah Tersedia di GitHub Releases!**  
+> 📥 **[Download MaoneArtMusic.apk (v1.0.2)](https://github.com/maoneart/MaoneArtMusic/releases/latest)**  
 > 
-> **Fitur Baru di v1.0.1**:
+> **Fitur Baru di v1.0.2**:
+> - ⚡ **Neon Audio Visualizer**: Efek visualizer neon reaktif audio live dengan 3 mode (Cyber Bars, Fluid Waves, Circular Pulse Orbit).
+> - 📊 **Ambient Mini Visualizer**: Strip visualizer neon dinamis di bawah artwork player dan mini player bar.
 > - 🎛️ **Hardware Equalizer HP**: Buka panel Dolby Atmos, Mi Sound, atau Dirac langsung dari pemutar musik via Android Intent.
 > - ⚡ **Kecepatan Putar (Playback Speed)**: Ubah tempo lagu (0.75x, 1.0x, 1.25x, 1.5x) secara instan tanpa lag.
 > - 🔊 **Volume Normalizer & Tuning Slider**: Penyesuaian volume presisi langsung di dialog efek.

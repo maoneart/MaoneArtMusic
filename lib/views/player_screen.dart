@@ -10,6 +10,7 @@ import '../widgets/seek_bar.dart';
 import '../widgets/app_artwork.dart';
 import '../widgets/playlist_picker_modal.dart';
 import '../widgets/synced_lyrics_view.dart';
+import '../widgets/equalizer_modal.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({Key? key}) : super(key: key);
@@ -135,6 +136,15 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 ],
               ),
         actions: [
+          IconButton(
+            icon: Icon(
+              Icons.tune_rounded,
+              color: playerState.isEqualizerEnabled ? MaoneArtTheme.primaryCyan : Colors.white70,
+              size: isLandscape ? 22 : 24,
+            ),
+            tooltip: "Equalizer & Efek Suara",
+            onPressed: () => showEqualizerModal(context),
+          ),
           IconButton(
             icon: Icon(
               Icons.lyrics_outlined,

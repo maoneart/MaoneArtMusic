@@ -9,6 +9,7 @@ import '../services/audio_cache_service.dart';
 import '../theme/maoneart_theme.dart';
 import '../widgets/glass_container.dart';
 import '../widgets/glass_modal.dart';
+import '../widgets/equalizer_modal.dart';
 import 'about_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -287,6 +288,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       const Icon(
                         Icons.keyboard_arrow_down_rounded,
                         color: MaoneArtTheme.primaryCyan,
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              _SettingTile(
+                icon: Icons.tune_rounded,
+                iconColor: MaoneArtTheme.spotifyGreenBright,
+                title: "Equalizer & Efek Suara",
+                subtitle: ref.watch(playerProvider).isEqualizerEnabled
+                    ? "Aktif • Preset: ${ref.watch(playerProvider).equalizerPreset} (${ref.watch(playerProvider).playbackSpeed}x)"
+                    : "Preset Suara: Bass Boost, Vokal & Kecepatan",
+                onTap: () => showEqualizerModal(context),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: ref.watch(playerProvider).isEqualizerEnabled
+                        ? MaoneArtTheme.spotifyGreen.withOpacity(0.2)
+                        : Colors.white.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: ref.watch(playerProvider).isEqualizerEnabled
+                          ? MaoneArtTheme.spotifyGreenBright.withOpacity(0.5)
+                          : Colors.white24,
+                      width: 1.0,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        ref.watch(playerProvider).isEqualizerEnabled
+                            ? ref.watch(playerProvider).equalizerPreset
+                            : "Atur",
+                        style: TextStyle(
+                          color: ref.watch(playerProvider).isEqualizerEnabled
+                              ? MaoneArtTheme.spotifyGreenBright
+                              : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: ref.watch(playerProvider).isEqualizerEnabled
+                            ? MaoneArtTheme.spotifyGreenBright
+                            : Colors.white70,
                         size: 16,
                       ),
                     ],

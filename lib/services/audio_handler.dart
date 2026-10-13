@@ -30,6 +30,7 @@ Future<MyAudioHandler?> initAudioService() async {
 
 class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   late final AudioPlayer _player;
+  AndroidEqualizer? _equalizer;
 
   Future<void> Function()? onSkipToNextCallback;
   Future<void> Function()? onSkipToPreviousCallback;
@@ -38,9 +39,19 @@ class MyAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
   Future<void> Function(Duration)? onSeekCallback;
 
   AudioPlayer get player => _player;
+  AndroidEqualizer? get equalizer => _equalizer;
 
   MyAudioHandler() {
+    AndroidEqualizer? eq;
+    try {
+      eq = AndroidEqualizer();
+    } catch (e) {
+      print('Equalizer initialization notice: $e');
+    }
+    _equalizer = eq;
+
     _player = AudioPlayer(
+      audioPipeline: eq != null ? AudioPipeline(androidAudioEffects: [eq]) : null,
       audioLoadConfiguration: const AudioLoadConfiguration(
         androidLoadControl: AndroidLoadControl(
           maxBufferDuration: Duration(seconds: 60),

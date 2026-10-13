@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import '../models/lyric_line.dart';
 import '../services/youtube_audio_extractor.dart';
@@ -16,15 +17,8 @@ enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 enum MusicRepeatMode { off, all, one }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  final AudioPlayer _localPlayer = AudioPlayer(
-    audioLoadConfiguration: const AudioLoadConfiguration(
-      androidLoadControl: AndroidLoadControl(
-        maxBufferDuration: Duration(seconds: 60),
-        bufferForPlaybackDuration: Duration(milliseconds: 250),
-        bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
-      ),
-    ),
-  );
+  AndroidEqualizer? _localEqualizer;
+  late final AudioPlayer _localPlayer;
   final StorageService _storageService = StorageService();
   final MusicService _musicService = MusicService();
 
@@ -56,6 +50,28 @@ class PlayerStateNotifier extends ChangeNotifier {
   Song? _karaokeSong;
   String? _karaokeError;
 
+  // 🎛️ Equalizer & Audio Presets State
+  bool _isEqualizerEnabled = false;
+  String _equalizerPreset = 'Normal';
+  double _playbackSpeed = 1.0;
+  final Map<int, double> _bandGains = {};
+
+  bool get isEqualizerEnabled => _isEqualizerEnabled;
+  String get equalizerPreset => _equalizerPreset;
+  double get playbackSpeed => _playbackSpeed;
+  Map<int, double> get bandGains => _bandGains;
+  AndroidEqualizer? get equalizer => globalAudioHandler?.equalizer ?? _localEqualizer;
+
+  static const Map<String, List<double>> equalizerPresets = {
+    'Normal': [0.0, 0.0, 0.0, 0.0, 0.0],
+    'Bass Boost': [6.0, 4.5, 0.0, 0.0, 1.0],
+    'Vokal & Akustik': [-1.5, 0.5, 4.0, 3.5, 1.0],
+    'Rock': [5.0, 2.5, -1.5, 3.5, 5.0],
+    'Pop': [4.0, 2.0, 1.0, 3.0, 4.5],
+    'Treble Boost': [-1.0, 0.0, 1.5, 5.0, 7.0],
+    'Electronic': [5.5, 3.0, -1.0, 2.5, 5.0],
+  };
+
   Song? get currentSong => _currentSong;
   List<Song> get queue => _queue;
   int get currentIndex => _currentIndex;
@@ -81,8 +97,24 @@ class PlayerStateNotifier extends ChangeNotifier {
   AudioPlayer get audioPlayer => _player;
 
   PlayerStateNotifier() {
+    try {
+      _localEqualizer = AndroidEqualizer();
+    } catch (_) {}
+
+    _localPlayer = AudioPlayer(
+      audioPipeline: _localEqualizer != null ? AudioPipeline(androidAudioEffects: [_localEqualizer!]) : null,
+      audioLoadConfiguration: const AudioLoadConfiguration(
+        androidLoadControl: AndroidLoadControl(
+          maxBufferDuration: Duration(seconds: 60),
+          bufferForPlaybackDuration: Duration(milliseconds: 250),
+          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
+        ),
+      ),
+    );
+
     _initListeners();
     _bindGlobalHandlerCallbacks();
+    _loadEqualizerPreferences();
   }
 
   void _bindGlobalHandlerCallbacks() {
@@ -773,6 +805,110 @@ class PlayerStateNotifier extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  // ── Equalizer & Audio Tuning Controls ────────────────────────────────────────
+
+  Future<void> setEqualizerEnabled(bool enabled) async {
+    _isEqualizerEnabled = enabled;
+    try {
+      await equalizer?.setEnabled(enabled);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('maoneart_eq_enabled', enabled);
+    } catch (e) {
+      print("Equalizer setEnabled notice: $e");
+    }
+    notifyListeners();
+  }
+
+  Future<void> setEqualizerPreset(String preset) async {
+    _equalizerPreset = preset;
+    final presetValues = equalizerPresets[preset];
+    if (presetValues != null && equalizer != null) {
+      try {
+        final params = await equalizer!.parameters;
+        for (int i = 0; i < params.bands.length; i++) {
+          final targetGain = i < presetValues.length ? presetValues[i] : 0.0;
+          final clampedGain = targetGain.clamp(params.minDecibels, params.maxDecibels);
+          await params.bands[i].setGain(clampedGain);
+          _bandGains[i] = clampedGain;
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('maoneart_eq_preset', preset);
+      } catch (e) {
+        print("Equalizer setPreset notice: $e");
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> setBandGain(int bandIndex, double gain) async {
+    _equalizerPreset = 'Custom';
+    _bandGains[bandIndex] = gain;
+    if (equalizer != null) {
+      try {
+        final params = await equalizer!.parameters;
+        if (bandIndex < params.bands.length) {
+          final clampedGain = gain.clamp(params.minDecibels, params.maxDecibels);
+          await params.bands[bandIndex].setGain(clampedGain);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('maoneart_eq_preset', 'Custom');
+          await prefs.setDouble('maoneart_eq_band_$bandIndex', clampedGain);
+        }
+      } catch (e) {
+        print("Equalizer setBandGain notice: $e");
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    _playbackSpeed = speed;
+    try {
+      await _player.setSpeed(speed);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble('maoneart_playback_speed', speed);
+    } catch (e) {
+      print("Playback speed notice: $e");
+    }
+    notifyListeners();
+  }
+
+  Future<void> resetEqualizer() async {
+    await setEqualizerPreset('Normal');
+    await setPlaybackSpeed(1.0);
+  }
+
+  Future<void> _loadEqualizerPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final enabled = prefs.getBool('maoneart_eq_enabled') ?? false;
+      final preset = prefs.getString('maoneart_eq_preset') ?? 'Normal';
+      final speed = prefs.getDouble('maoneart_playback_speed') ?? 1.0;
+
+      _isEqualizerEnabled = enabled;
+      _equalizerPreset = preset;
+      _playbackSpeed = speed;
+
+      if (_player.playing || speed != 1.0) {
+        await _player.setSpeed(speed);
+      }
+
+      if (equalizer != null) {
+        await equalizer!.setEnabled(enabled);
+        if (preset != 'Custom' && equalizerPresets.containsKey(preset)) {
+          final presetValues = equalizerPresets[preset]!;
+          final params = await equalizer!.parameters;
+          for (int i = 0; i < params.bands.length; i++) {
+            final targetGain = i < presetValues.length ? presetValues[i] : 0.0;
+            final clampedGain = targetGain.clamp(params.minDecibels, params.maxDecibels);
+            await params.bands[i].setGain(clampedGain);
+            _bandGains[i] = clampedGain;
+          }
+        }
+      }
+      notifyListeners();
+    } catch (_) {}
   }
 
   @override

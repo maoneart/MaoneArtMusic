@@ -31,16 +31,14 @@
   - Backup kunci disimpan persisten di `~/.keystore_backup/upload-keystore.jks`.
   - Versi aplikasi dinaikkan ke `v1.0.1+2` di `pubspec.yaml`.
 
-### ⚡ Neon Audio Visualizer Engine (13 Oktober 2026)
-- **Problem**: Pengguna menanyakan keberadaan fitur Neon Visualizer yang belum tersedia di pemutar musik.
+### ⚡ Real Audio Rhythm & Native FFT Visualizer (13 Oktober 2026)
+- **Problem**: Pengguna menanyakan mengapa animasi visualizer neon (bars, waves, pulse) sebelumnya tidak mengikuti irama ketukan/tempo lagu secara nyata.
 - **Solusi**:
-  - Dibuat komponen visualizer reaktif performa tinggi `lib/widgets/neon_visualizer.dart` (60 FPS `CustomPainter` tanpa butuh izin sensitif mikrofon `RECORD_AUDIO`).
-  - Menyediakan 3 mode visualizer neon:
-    1. **Cyber Spectrum Bars**: 24 bar equalizer vertikal dengan harmonic frequency weighting, peak meter dots mengambang, dan cermin refleksi air bawah.
-    2. **Fluid Neon Waves**: Multi-layer gelombang sinus glowing (Cyan, Purple, Lime) dengan Gaussian window damping.
-    3. **Circular Orbit Pulse**: Cincin gelombang melingkar dan radial energy spokes di sekitar thumbnail album.
-  - Integrasi tombol toggle visualizer di AppBar `PlayerScreen` (`Icons.graphic_eq_rounded`), ambient mini visualizer strip di bawah artwork, serta indikator mini visualizer 4-bar di `MiniPlayer`.
-  - Versi aplikasi dinaikkan ke `v1.0.2+3` di `pubspec.yaml`.
+  - Implementasi integrasi native Android `android.media.audiofx.Visualizer` di `MainActivity.kt` dengan EventChannel `com.maoneart.music/visualizer_stream`. Menghasilkan 24 pita frekuensi audio asli (FFT spectrum: sub-bass, kick drum, vocal mids, hi-hats) di ~25-30 FPS secara real-time.
+  - Ditambahkan izin `<uses-permission android:name="android.permission.RECORD_AUDIO"/>` di `AndroidManifest.xml` serta tombol aktivasi izin cepat di visualizer deck ("Sinkronkan FFT Asli").
+  - Dibangun algoritma cadangan **Musical Beat-Sync Engine** (128 BPM 4/4 meter) berbasis `position.inMilliseconds` untuk sinkronisasi transient kick (beat 1 & 3), snare/clap (beat 2 & 4), dan 8th-note hi-hats secara dinamis saat FFT native dalam mode idle.
+  - Parameter `position` dan `sessionId` diteruskan dari `player_screen.dart` dan `mini_player.dart` ke visualizer.
+  - Versi aplikasi dinaikkan ke `v1.0.3+4` di `pubspec.yaml`.
 
 ---
 

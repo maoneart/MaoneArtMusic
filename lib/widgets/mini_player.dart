@@ -106,6 +106,7 @@ class MiniPlayer extends ConsumerWidget {
                                     height: 10,
                                     child: NeonMiniVisualizerStrip(
                                       isPlaying: true,
+                                      position: playerState.position,
                                       barCount: 4,
                                       height: 10,
                                       glowColor: MaoneArtTheme.primaryCyan,

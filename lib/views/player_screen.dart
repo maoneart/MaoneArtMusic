@@ -910,6 +910,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             height: 22,
             child: NeonMiniVisualizerStrip(
               isPlaying: playerState.isPlaying,
+              position: playerState.position,
               barCount: 22,
               height: 22,
               glowColor: MaoneArtTheme.primaryCyan,
@@ -921,9 +922,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   Widget _buildVisualizerView(BuildContext context, PlayerStateNotifier playerState, dynamic song) {
+    final sessionId = playerState.audioPlayer.androidAudioSessionId ?? 0;
     return NeonVisualizerDeck(
       isPlaying: playerState.isPlaying,
       song: song,
+      position: playerState.position,
+      sessionId: sessionId,
     );
   }
 

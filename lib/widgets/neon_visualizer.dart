@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../theme/maoneart_theme.dart';
 import 'glass_container.dart';
 import 'app_artwork.dart';
@@ -15,12 +17,16 @@ enum NeonVisualizerType {
 class NeonVisualizerDeck extends StatefulWidget {
   final bool isPlaying;
   final Song song;
+  final Duration position;
+  final int sessionId;
   final NeonVisualizerType initialType;
 
   const NeonVisualizerDeck({
     Key? key,
     required this.isPlaying,
     required this.song,
+    this.position = Duration.zero,
+    this.sessionId = 0,
     this.initialType = NeonVisualizerType.bars,
   }) : super(key: key);
 
@@ -29,8 +35,16 @@ class NeonVisualizerDeck extends StatefulWidget {
 }
 
 class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTickerProviderStateMixin {
+  static const MethodChannel _visualizerChannel = MethodChannel('com.maoneart.music/visualizer');
+  static const EventChannel _streamChannel = EventChannel('com.maoneart.music/visualizer_stream');
+
   late AnimationController _controller;
   late NeonVisualizerType _currentType;
+
+  StreamSubscription? _streamSubscription;
+  List<double> _currentBands = List.filled(24, 0.1);
+  bool _isNativeActive = false;
+  bool _hasPermission = false;
 
   @override
   void initState() {
@@ -38,14 +52,159 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
     _currentType = widget.initialType;
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
+      duration: const Duration(milliseconds: 1600),
     )..repeat();
+
+    _initNativeVisualizer();
+  }
+
+  @override
+  void didUpdateWidget(covariant NeonVisualizerDeck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.sessionId != oldWidget.sessionId || widget.isPlaying != oldWidget.isPlaying) {
+      if (widget.isPlaying && _hasPermission) {
+        _startNativeStream();
+      }
+    }
+  }
+
+  Future<void> _initNativeVisualizer() async {
+    try {
+      final hasPerm = await _visualizerChannel.invokeMethod<bool>('hasPermission') ?? false;
+      if (mounted) {
+        setState(() {
+          _hasPermission = hasPerm;
+        });
+      }
+      if (hasPerm && widget.isPlaying) {
+        _startNativeStream();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _requestPermissionAndStart() async {
+    try {
+      final granted = await _visualizerChannel.invokeMethod<bool>('requestPermission') ?? false;
+      if (mounted) {
+        setState(() {
+          _hasPermission = granted;
+        });
+      }
+      if (granted) {
+        _startNativeStream();
+      }
+    } catch (e) {
+      debugPrint("requestPermission error: $e");
+    }
+  }
+
+  void _startNativeStream() async {
+    try {
+      await _visualizerChannel.invokeMethod('startVisualizer', {'sessionId': widget.sessionId});
+      _streamSubscription?.cancel();
+      _streamSubscription = _streamChannel.receiveBroadcastStream().listen(
+        (data) {
+          if (data is List && mounted) {
+            final raw = data.map((e) => (e as num).toDouble()).toList();
+            if (raw.isNotEmpty) {
+              final newBands = List<double>.filled(24, 0.0);
+              for (int i = 0; i < 24; i++) {
+                final target = i < raw.length ? raw[i] : 0.0;
+                // Fast attack, smooth decay (Exponential Smoothing)
+                newBands[i] = (_currentBands[i] * 0.45) + (target * 0.55);
+              }
+              setState(() {
+                _currentBands = newBands;
+                _isNativeActive = true;
+              });
+            }
+          }
+        },
+        onError: (err) {
+          if (mounted) {
+            setState(() {
+              _isNativeActive = false;
+            });
+          }
+        },
+      );
+    } catch (e) {
+      debugPrint("startVisualizer error: $e");
+    }
+  }
+
+  void _stopNativeStream() {
+    _streamSubscription?.cancel();
+    _streamSubscription = null;
+    _visualizerChannel.invokeMethod('stopVisualizer').catchError((_) {});
+    _isNativeActive = false;
   }
 
   @override
   void dispose() {
+    _stopNativeStream();
     _controller.dispose();
     super.dispose();
+  }
+
+  /// Calculates real musical tempo and beat-reactive rhythm when native FFT is idle
+  List<double> _getRhythmicBands() {
+    if (_isNativeActive && widget.isPlaying) {
+      return _currentBands;
+    }
+
+    if (!widget.isPlaying) {
+      // Gentle idle breathing
+      return List.generate(24, (i) {
+        final idle = math.sin((_controller.value * 2 * math.pi) + (i * 0.25));
+        return (0.08 + (idle * 0.04)).clamp(0.04, 0.15);
+      });
+    }
+
+    final int ms = widget.position.inMilliseconds;
+    // 128 BPM rhythm: ~468ms per quarter-note beat
+    const double beatPeriod = 468.0;
+    final double beatCount = ms / beatPeriod;
+    final int currentBeat = (beatCount % 4).floor(); // 0, 1, 2, 3 in 4/4 meter
+    final double beatPhase = (ms % beatPeriod.toInt()) / beatPeriod; // 0.0 to 1.0
+    final double decay = math.exp(-beatPhase * 4.8); // Percussive transient snap
+
+    // Kick drum: Hits hard on beat 1 and 3 (0 and 2)
+    final bool isKick = (currentBeat == 0 || currentBeat == 2);
+    final double kickPulse = isKick ? decay : (decay * 0.25);
+
+    // Snare / Clap: Snaps on beat 2 and 4 (1 and 3)
+    final bool isSnare = (currentBeat == 1 || currentBeat == 3);
+    final double snarePulse = isSnare ? decay : (decay * 0.18);
+
+    // Hi-hats: 8th notes (half beat = 234ms)
+    final double hatPhase = (ms % (beatPeriod ~/ 2)) / (beatPeriod / 2);
+    final double hatPulse = math.exp(-hatPhase * 5.5);
+
+    // Dynamic 16-bar phrase energy cycle (build-up & drops)
+    final double phraseEnergy = 0.72 + (math.sin(beatCount * (math.pi / 8)) * 0.28);
+
+    final List<double> bands = List.filled(24, 0.1);
+    for (int i = 0; i < 24; i++) {
+      double val = 0.15;
+      if (i < 7) {
+        // Bass / Sub-bass: Heavily driven by kick
+        final double dist = 1.0 - (i / 7.0);
+        val = 0.18 + (kickPulse * 0.82 * dist);
+      } else if (i < 16) {
+        // Mids / Vocals / Snare: Driven by snare and chord harmonics
+        final double midSpread = math.sin((i - 7) * (math.pi / 9));
+        val = 0.18 + (snarePulse * 0.75 * midSpread);
+      } else {
+        // Highs / Treble / Cymbals: Driven by fast hi-hats
+        final double highSpread = (i - 16) / 8.0;
+        val = 0.15 + (hatPulse * 0.85 * highSpread);
+      }
+      val *= phraseEnergy;
+      bands[i] = val.clamp(0.08, 1.0);
+    }
+
+    return bands;
   }
 
   @override
@@ -112,13 +271,14 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
 
           const SizedBox(height: 12),
 
-          // 2. Main Animated Canvas
+          // 2. Main Animated Canvas (Driven by live or beat-sync bands)
           Expanded(
             child: AnimatedBuilder(
               animation: _controller,
               builder: (context, child) {
+                final bands = _getRhythmicBands();
                 return Center(
-                  child: _buildVisualizerBody(),
+                  child: _buildVisualizerBody(bands),
                 );
               },
             ),
@@ -126,43 +286,8 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
 
           const SizedBox(height: 8),
 
-          // 3. Status indicator & hint
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 7,
-                height: 7,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: widget.isPlaying
-                      ? MaoneArtTheme.accentGreen
-                      : Colors.white38,
-                  boxShadow: widget.isPlaying
-                      ? [
-                          BoxShadow(
-                            color: MaoneArtTheme.accentGreen.withOpacity(0.8),
-                            blurRadius: 6,
-                            spreadRadius: 1,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                widget.isPlaying ? "AUDIO REACTIVE LIVE" : "PAUSED (IDLE PULSE)",
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                  color: widget.isPlaying
-                      ? MaoneArtTheme.accentGreen
-                      : Colors.white38,
-                ),
-              ),
-            ],
-          ),
+          // 3. Audio Rhythm Status & Hardware FFT Trigger
+          _buildRhythmStatusBadge(),
         ],
       ),
     );
@@ -211,20 +336,128 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
     );
   }
 
-  Widget _buildVisualizerBody() {
+  Widget _buildRhythmStatusBadge() {
+    if (_isNativeActive && widget.isPlaying) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: MaoneArtTheme.primaryCyan.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.4), width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: MaoneArtTheme.primaryCyan,
+                boxShadow: [
+                  BoxShadow(
+                    color: MaoneArtTheme.primaryCyan.withOpacity(0.9),
+                    blurRadius: 6,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              "IRAMA AUDIO ASLI AKTIF (HARDWARE FFT)",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.0,
+                color: MaoneArtTheme.primaryCyan,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: widget.isPlaying ? MaoneArtTheme.accentGreen : Colors.white38,
+            boxShadow: widget.isPlaying
+                ? [
+                    BoxShadow(
+                      color: MaoneArtTheme.accentGreen.withOpacity(0.8),
+                      blurRadius: 6,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          widget.isPlaying ? "BEAT SYNC AKTIF (128 BPM)" : "PAUSED (IDLE PULSE)",
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 1.0,
+            color: widget.isPlaying ? MaoneArtTheme.accentGreen : Colors.white38,
+          ),
+        ),
+        if (!_hasPermission && widget.isPlaying) ...[
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _requestPermissionAndStart,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: MaoneArtTheme.primaryPurple.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MaoneArtTheme.primaryPurple, width: 0.8),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.mic, size: 10, color: Colors.white),
+                  SizedBox(width: 3),
+                  Text(
+                    "Sinkronkan FFT Asli",
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildVisualizerBody(List<double> bands) {
     switch (_currentType) {
       case NeonVisualizerType.bars:
         return NeonBarsVisualizer(
+          bands: bands,
           animationValue: _controller.value,
           isPlaying: widget.isPlaying,
         );
       case NeonVisualizerType.waves:
         return NeonWavesVisualizer(
+          bands: bands,
           animationValue: _controller.value,
           isPlaying: widget.isPlaying,
         );
       case NeonVisualizerType.pulse:
         return NeonPulseVisualizer(
+          bands: bands,
           animationValue: _controller.value,
           isPlaying: widget.isPlaying,
           artworkUrl: widget.song.artworkUrl,
@@ -236,6 +469,7 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
 /// Compact Neon Audio Wave Strip (Can be embedded beneath Artwork or in mini bars)
 class NeonMiniVisualizerStrip extends StatefulWidget {
   final bool isPlaying;
+  final Duration position;
   final int barCount;
   final double height;
   final Color? glowColor;
@@ -243,6 +477,7 @@ class NeonMiniVisualizerStrip extends StatefulWidget {
   const NeonMiniVisualizerStrip({
     Key? key,
     required this.isPlaying,
+    this.position = Duration.zero,
     this.barCount = 20,
     this.height = 36,
     this.glowColor,
@@ -261,7 +496,7 @@ class _NeonMiniVisualizerStripState extends State<NeonMiniVisualizerStrip>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1800),
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
   }
 
@@ -281,6 +516,7 @@ class _NeonMiniVisualizerStripState extends State<NeonMiniVisualizerStrip>
           painter: _NeonMiniStripPainter(
             animationValue: _controller.value,
             isPlaying: widget.isPlaying,
+            positionMs: widget.position.inMilliseconds,
             barCount: widget.barCount,
             primaryColor: widget.glowColor ?? MaoneArtTheme.primaryCyan,
           ),
@@ -291,14 +527,16 @@ class _NeonMiniVisualizerStripState extends State<NeonMiniVisualizerStrip>
 }
 
 // ---------------------------------------------------------------------------
-// 1. NEON BARS SPECTRUM VISUALIZER (CYBER NEON BARS)
+// 1. NEON BARS SPECTRUM VISUALIZER (CYBER NEON BARS - REAL BEAT DRIVEN)
 // ---------------------------------------------------------------------------
 class NeonBarsVisualizer extends StatelessWidget {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
 
   const NeonBarsVisualizer({
     Key? key,
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
   }) : super(key: key);
@@ -310,6 +548,7 @@ class NeonBarsVisualizer extends StatelessWidget {
         return CustomPaint(
           size: Size(constraints.maxWidth, constraints.maxHeight),
           painter: _NeonBarsPainter(
+            bands: bands,
             animationValue: animationValue,
             isPlaying: isPlaying,
           ),
@@ -320,17 +559,19 @@ class NeonBarsVisualizer extends StatelessWidget {
 }
 
 class _NeonBarsPainter extends CustomPainter {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
 
   _NeonBarsPainter({
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    const int barCount = 24;
+    final int barCount = bands.length.clamp(16, 24);
     final double barWidth = (size.width / (barCount * 1.55)).clamp(4.0, 10.0);
     final double totalWidth = barCount * barWidth + (barCount - 1) * (barWidth * 0.55);
     final double startX = (size.width - totalWidth) / 2;
@@ -343,24 +584,7 @@ class _NeonBarsPainter extends CustomPainter {
 
     for (int i = 0; i < barCount; i++) {
       final double normalizedIdx = i / barCount;
-      // Frequency weighting: Bass on left (boosted), mids in center, highs on right
-      final double freqMultiplier = (math.sin(normalizedIdx * math.pi) * 0.5 + 0.5);
-
-      // Multiple harmonic sine waves for rhythmic bouncing
-      final double wave1 = math.sin((animationValue * 2 * math.pi * 1.8) + (i * 0.45));
-      final double wave2 = math.cos((animationValue * 2 * math.pi * 3.2) - (i * 0.3));
-      final double wave3 = math.sin((animationValue * 2 * math.pi * 0.9) + (i * 0.8));
-
-      double rawHeightRatio;
-      if (isPlaying) {
-        rawHeightRatio = ((wave1 * 0.45 + wave2 * 0.35 + wave3 * 0.2).abs() * 0.85 + 0.15);
-        rawHeightRatio = (rawHeightRatio * (0.65 + freqMultiplier * 0.5)).clamp(0.12, 1.0);
-      } else {
-        // Subtle resting idle breathing
-        final double idle = math.sin((animationValue * 2 * math.pi) + (i * 0.25));
-        rawHeightRatio = (0.08 + (idle * 0.04)).clamp(0.04, 0.15);
-      }
-
+      final double rawHeightRatio = bands[i].clamp(0.05, 1.0);
       final double barH = rawHeightRatio * maxBarHeight;
       final double x = startX + i * (barWidth * 1.55);
       final double topY = centerY - barH;
@@ -383,7 +607,7 @@ class _NeonBarsPainter extends CustomPainter {
 
       // Outer Neon Glow Layer
       glowPaint
-        ..color = baseColor.withOpacity(isPlaying ? 0.35 : 0.15)
+        ..color = baseColor.withOpacity(isPlaying ? 0.38 : 0.12)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
       canvas.drawRRect(barRect, glowPaint);
 
@@ -392,9 +616,9 @@ class _NeonBarsPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          Colors.white.withOpacity(0.9),
+          Colors.white.withOpacity(0.92),
           baseColor,
-          baseColor.withOpacity(0.4),
+          baseColor.withOpacity(0.35),
         ],
         stops: const [0.0, 0.35, 1.0],
       ).createShader(Rect.fromLTRB(x, topY, x + barWidth, bottomY));
@@ -432,20 +656,23 @@ class _NeonBarsPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _NeonBarsPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue ||
+    return oldDelegate.bands != bands ||
+        oldDelegate.animationValue != animationValue ||
         oldDelegate.isPlaying != isPlaying;
   }
 }
 
 // ---------------------------------------------------------------------------
-// 2. NEON WAVES VISUALIZER (FLUID MULTI-LAYER SINE WAVES)
+// 2. NEON WAVES VISUALIZER (FLUID SINE WAVES - MODULATED BY REAL AUDIO)
 // ---------------------------------------------------------------------------
 class NeonWavesVisualizer extends StatelessWidget {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
 
   const NeonWavesVisualizer({
     Key? key,
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
   }) : super(key: key);
@@ -457,6 +684,7 @@ class NeonWavesVisualizer extends StatelessWidget {
         return CustomPaint(
           size: Size(constraints.maxWidth, constraints.maxHeight),
           painter: _NeonWavesPainter(
+            bands: bands,
             animationValue: animationValue,
             isPlaying: isPlaying,
           ),
@@ -467,10 +695,12 @@ class NeonWavesVisualizer extends StatelessWidget {
 }
 
 class _NeonWavesPainter extends CustomPainter {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
 
   _NeonWavesPainter({
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
   });
@@ -478,38 +708,52 @@ class _NeonWavesPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final double centerY = size.height * 0.52;
-    final double maxAmplitude = isPlaying ? size.height * 0.32 : size.height * 0.08;
 
-    // Draw 3 harmonic neon wave layers
+    // Extract average energy for Low (Bass), Mid, High from bands
+    double bassEnergy = 0.2;
+    double midEnergy = 0.2;
+    double highEnergy = 0.2;
+
+    if (bands.length >= 24) {
+      bassEnergy = (bands.sublist(0, 7).reduce((a, b) => a + b) / 7.0).clamp(0.05, 1.0);
+      midEnergy = (bands.sublist(7, 16).reduce((a, b) => a + b) / 9.0).clamp(0.05, 1.0);
+      highEnergy = (bands.sublist(16, 24).reduce((a, b) => a + b) / 8.0).clamp(0.05, 1.0);
+    }
+
+    final double maxAmplitude = isPlaying ? size.height * 0.38 : size.height * 0.08;
+
+    // 1. Cyan Bass Wave
     _drawSineWave(
       canvas: canvas,
       size: size,
       centerY: centerY,
-      amplitude: maxAmplitude * 0.95,
-      frequency: 2.2,
-      phase: animationValue * 2 * math.pi * 2.0,
+      amplitude: maxAmplitude * (isPlaying ? bassEnergy * 1.1 : 0.6),
+      frequency: 2.0,
+      phase: animationValue * 2 * math.pi * 2.2,
       color: MaoneArtTheme.primaryCyan,
-      strokeWidth: 3.0,
+      strokeWidth: 3.2,
     );
 
+    // 2. Purple Mid Wave
     _drawSineWave(
       canvas: canvas,
       size: size,
       centerY: centerY,
-      amplitude: maxAmplitude * 0.75,
-      frequency: 3.1,
-      phase: -animationValue * 2 * math.pi * 1.5 + 1.2,
+      amplitude: maxAmplitude * (isPlaying ? midEnergy * 0.9 : 0.5),
+      frequency: 3.2,
+      phase: -animationValue * 2 * math.pi * 1.8 + 1.2,
       color: MaoneArtTheme.primaryPurple,
-      strokeWidth: 2.5,
+      strokeWidth: 2.6,
     );
 
+    // 3. Green Treble Wave
     _drawSineWave(
       canvas: canvas,
       size: size,
       centerY: centerY,
-      amplitude: maxAmplitude * 0.55,
-      frequency: 4.0,
-      phase: animationValue * 2 * math.pi * 2.5 + 2.5,
+      amplitude: maxAmplitude * (isPlaying ? highEnergy * 0.75 : 0.4),
+      frequency: 4.4,
+      phase: animationValue * 2 * math.pi * 2.8 + 2.4,
       color: MaoneArtTheme.accentGreen,
       strokeWidth: 2.0,
     );
@@ -529,8 +773,7 @@ class _NeonWavesPainter extends CustomPainter {
     final double step = size.width / 60;
 
     for (double x = 0; x <= size.width; x += step) {
-      // Gaussian window damping at the left/right edges
-      final double normalizedX = (x / size.width) * 2 - 1; // -1 to 1
+      final double normalizedX = (x / size.width) * 2 - 1;
       final double damping = math.exp(-3.0 * normalizedX * normalizedX);
 
       final double y = centerY +
@@ -547,7 +790,7 @@ class _NeonWavesPainter extends CustomPainter {
 
     // Outer Glow
     final Paint glowPaint = Paint()
-      ..color = color.withOpacity(isPlaying ? 0.45 : 0.2)
+      ..color = color.withOpacity(isPlaying ? 0.48 : 0.18)
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeWidth * 2.8
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
@@ -564,21 +807,24 @@ class _NeonWavesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _NeonWavesPainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue ||
+    return oldDelegate.bands != bands ||
+        oldDelegate.animationValue != animationValue ||
         oldDelegate.isPlaying != isPlaying;
   }
 }
 
 // ---------------------------------------------------------------------------
-// 3. NEON PULSE VISUALIZER (CIRCULAR ORBIT & GLOW RINGS)
+// 3. NEON PULSE VISUALIZER (CIRCULAR ORBIT - KICK BASS DRIVEN)
 // ---------------------------------------------------------------------------
 class NeonPulseVisualizer extends StatelessWidget {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
   final String artworkUrl;
 
   const NeonPulseVisualizer({
     Key? key,
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
     required this.artworkUrl,
@@ -598,53 +844,69 @@ class NeonPulseVisualizer extends StatelessWidget {
             CustomPaint(
               size: Size(size, size),
               painter: _NeonPulsePainter(
+                bands: bands,
                 animationValue: animationValue,
                 isPlaying: isPlaying,
                 innerRadius: centerArtworkSize / 2,
               ),
             ),
 
-            // Center Circular Rotating Album Thumbnail
-            Container(
-              width: centerArtworkSize,
-              height: centerArtworkSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: MaoneArtTheme.primaryCyan.withOpacity(0.8),
-                  width: 2.0,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: MaoneArtTheme.primaryCyan.withOpacity(0.5),
-                    blurRadius: 24,
-                    spreadRadius: 4,
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: AppArtwork(
-                  artworkUrl: artworkUrl,
-                  width: centerArtworkSize,
-                  height: centerArtworkSize,
-                  borderRadius: 0,
-                  iconSize: 42,
-                ),
-              ),
-            ),
+            // Center Circular Rotating Album Thumbnail with kick pulse bounce
+            _buildCenterArtwork(centerArtworkSize),
           ],
         );
       },
     );
   }
+
+  Widget _buildCenterArtwork(double baseSize) {
+    double bassKick = 0.0;
+    if (bands.isNotEmpty && isPlaying) {
+      bassKick = (bands.take(4).reduce((a, b) => a + b) / 4.0).clamp(0.0, 1.0);
+    }
+    final double scale = 1.0 + (bassKick * 0.08);
+
+    return Transform.scale(
+      scale: scale,
+      child: Container(
+        width: baseSize,
+        height: baseSize,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: MaoneArtTheme.primaryCyan.withOpacity(0.85),
+            width: 2.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: MaoneArtTheme.primaryCyan.withOpacity(0.4 + (bassKick * 0.4)),
+              blurRadius: 24 + (bassKick * 16),
+              spreadRadius: 4 + (bassKick * 4),
+            ),
+          ],
+        ),
+        child: ClipOval(
+          child: AppArtwork(
+            artworkUrl: artworkUrl,
+            width: baseSize,
+            height: baseSize,
+            borderRadius: 0,
+            iconSize: 42,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _NeonPulsePainter extends CustomPainter {
+  final List<double> bands;
   final double animationValue;
   final bool isPlaying;
   final double innerRadius;
 
   _NeonPulsePainter({
+    required this.bands,
     required this.animationValue,
     required this.isPlaying,
     required this.innerRadius,
@@ -655,11 +917,17 @@ class _NeonPulsePainter extends CustomPainter {
     final Offset center = Offset(size.width / 2, size.height / 2);
     final double maxRadius = (size.width / 2) * 0.95;
 
-    // 1. Expanding Neon Pulse Rings
+    // Bass energy for ring expansion
+    double bassEnergy = 0.2;
+    if (bands.isNotEmpty && isPlaying) {
+      bassEnergy = (bands.take(5).reduce((a, b) => a + b) / 5.0).clamp(0.05, 1.0);
+    }
+
+    // 1. Expanding Neon Pulse Rings modulated by bass kick
     for (int ring = 0; ring < 3; ring++) {
       final double ringPhase = (animationValue + (ring * 0.33)) % 1.0;
       final double ringRadius = innerRadius + (maxRadius - innerRadius) * ringPhase;
-      final double ringOpacity = (1.0 - ringPhase) * (isPlaying ? 0.65 : 0.25);
+      final double ringOpacity = (1.0 - ringPhase) * (isPlaying ? (0.4 + bassEnergy * 0.5) : 0.2);
 
       final Color ringColor = ring == 0
           ? MaoneArtTheme.primaryCyan
@@ -670,27 +938,29 @@ class _NeonPulsePainter extends CustomPainter {
       final Paint ringPaint = Paint()
         ..color = ringColor.withOpacity(ringOpacity.clamp(0.0, 1.0))
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
+        ..strokeWidth = 2.0 + (bassEnergy * 1.5)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
       canvas.drawCircle(center, ringRadius, ringPaint);
     }
 
-    // 2. Radial Audio Frequency Spikes around the circle
+    // 2. Radial Audio Frequency Spikes mapped to frequency bands
     const int spokeCount = 36;
     final double spokeBaseRadius = innerRadius + 8.0;
 
     final Paint spikePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 2.2;
+      ..strokeWidth = 2.4;
 
     for (int i = 0; i < spokeCount; i++) {
       final double angle = (i / spokeCount) * 2 * math.pi;
-      final double wave = math.sin((animationValue * 2 * math.pi * 2.0) + (i * 0.7));
+      final int bandIdx = (i * bands.length ~/ spokeCount).clamp(0, bands.length - 1);
+      final double bandMag = bands.isNotEmpty ? bands[bandIdx] : 0.2;
+
       final double spikeLen = isPlaying
-          ? (wave.abs() * (maxRadius - spokeBaseRadius) * 0.75 + 4.0)
-          : (4.0 + (wave * 2.0));
+          ? (bandMag * (maxRadius - spokeBaseRadius) * 0.85 + 4.0)
+          : (4.0 + (math.sin(animationValue * 2 * math.pi + i) * 2.0));
 
       final double startX = center.dx + math.cos(angle) * spokeBaseRadius;
       final double startY = center.dy + math.sin(angle) * spokeBaseRadius;
@@ -703,30 +973,33 @@ class _NeonPulsePainter extends CustomPainter {
               ? MaoneArtTheme.primaryPurple
               : MaoneArtTheme.accentGreen;
 
-      spikePaint.color = spikeColor.withOpacity(isPlaying ? 0.85 : 0.35);
+      spikePaint.color = spikeColor.withOpacity(isPlaying ? (0.6 + bandMag * 0.4).clamp(0.0, 1.0) : 0.35);
       canvas.drawLine(Offset(startX, startY), Offset(endX, endY), spikePaint);
     }
   }
 
   @override
   bool shouldRepaint(covariant _NeonPulsePainter oldDelegate) {
-    return oldDelegate.animationValue != animationValue ||
+    return oldDelegate.bands != bands ||
+        oldDelegate.animationValue != animationValue ||
         oldDelegate.isPlaying != isPlaying;
   }
 }
 
 // ---------------------------------------------------------------------------
-// 4. MINI PAINTER FOR HORIZONTAL COMPACT STRIP
+// 4. MINI PAINTER FOR HORIZONTAL COMPACT STRIP (RHYTHMIC BEAT-AWARE)
 // ---------------------------------------------------------------------------
 class _NeonMiniStripPainter extends CustomPainter {
   final double animationValue;
   final bool isPlaying;
+  final int positionMs;
   final int barCount;
   final Color primaryColor;
 
   _NeonMiniStripPainter({
     required this.animationValue,
     required this.isPlaying,
+    required this.positionMs,
     required this.barCount,
     required this.primaryColor,
   });
@@ -741,14 +1014,18 @@ class _NeonMiniStripPainter extends CustomPainter {
     final Paint barPaint = Paint()..style = PaintingStyle.fill;
     final Paint glowPaint = Paint()..style = PaintingStyle.fill;
 
+    // 128 BPM beat pulse
+    const double beatPeriod = 468.0;
+    final double beatPhase = (positionMs % beatPeriod.toInt()) / beatPeriod;
+    final double decay = math.exp(-beatPhase * 4.2);
+
     for (int i = 0; i < barCount; i++) {
       final double norm = i / barCount;
-      final double wave1 = math.sin((animationValue * 2 * math.pi * 2.0) + (i * 0.5));
-      final double wave2 = math.cos((animationValue * 2 * math.pi * 3.5) - (i * 0.3));
-
       double heightFactor;
+
       if (isPlaying) {
-        heightFactor = ((wave1 * 0.6 + wave2 * 0.4).abs() * 0.85 + 0.15).clamp(0.12, 1.0);
+        final double harmonic = math.sin((animationValue * 2 * math.pi * 2.0) + (i * 0.6));
+        heightFactor = (0.2 + (decay * 0.65 * (1.0 - norm * 0.5)) + (harmonic.abs() * 0.2)).clamp(0.12, 1.0);
       } else {
         heightFactor = 0.12;
       }
@@ -768,11 +1045,11 @@ class _NeonMiniStripPainter extends CustomPainter {
       );
 
       glowPaint
-        ..color = color.withOpacity(isPlaying ? 0.35 : 0.1)
+        ..color = color.withOpacity(isPlaying ? 0.38 : 0.1)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
       canvas.drawRRect(rect, glowPaint);
 
-      barPaint.color = color.withOpacity(isPlaying ? 0.9 : 0.4);
+      barPaint.color = color.withOpacity(isPlaying ? 0.92 : 0.4);
       canvas.drawRRect(rect, barPaint);
     }
   }
@@ -780,6 +1057,7 @@ class _NeonMiniStripPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _NeonMiniStripPainter oldDelegate) {
     return oldDelegate.animationValue != animationValue ||
+        oldDelegate.positionMs != positionMs ||
         oldDelegate.isPlaying != isPlaying;
   }
 }

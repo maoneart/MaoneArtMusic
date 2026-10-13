@@ -43,26 +43,34 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Extract App Version
+        id: app_version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+          echo "raw_version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/heads/main')
         with:
-          tag_name: v1.0.0
-          name: 'MaoneArt Music v1.0.0 (Release)'
+          tag_name: ${{ steps.app_version.outputs.version }}
+          name: 'MaoneArt Music ${{ steps.app_version.outputs.version }} (Release)'
           body: |
-            ## 🎵 MaoneArt Music - Android Release APK
+            ## 🎵 MaoneArt Music ${{ steps.app_version.outputs.version }} - Android Release APK
             
-            Versi terbaru aplikasi MaoneArt Music dengan audio streaming engine berbasis Musify!
+            Versi terbaru aplikasi MaoneArt Music dengan fitur efek audio, equalizer hardware, dan update in-place mulus!
             
-            ### ✨ Fitur:
-            - **Musify YouTube Audio Engine**: Audio extraction super cepat, direct YouTube Music streams.
-            - **No 30s Previews**: Pure full-length high quality audio (320kbps).
-            - **Spotify Style Glassmorphic UI**: Ambient glow, modern charts & pill category chips.
-            - **Background Playback & Lockscreen**: MediaSession notification controls & lockscreen artwork.
-            - **Lirik & Antrean**: Fitur lirik lagu dan daftar antrean bawaan.
-            - **Offline Library**: Simpan lagu favorit & playlist kustom secara lokal.
+            ### ✨ Fitur Baru di Versi ${{ steps.app_version.outputs.version }}:
+            - 🎛️ **Hardware Equalizer HP**: Buka panel Dolby Atmos / Mi Sound / SoundAlive langsung dari pemutar via Android Intent.
+            - ⚡ **Kecepatan Putar Audio**: Kontrol kecepatan playback (0.75x, 1.0x, 1.25x, 1.5x) bebas lag dan responsif.
+            - 🔊 **Volume Output Tuning**: Slider volume output presisi dalam modal glassmorphic.
+            - 🔑 **Permanent Release Keystore**: Tanda tangan digital permanen sehingga update berikutnya bisa langsung ditimpa (in-place update) tanpa perlu uninstall lagi!
+            - 🚀 **Zero-Buffering Playback**: Streaming YouTube super lancar dengan hardware audio offload penuh.
+            - 💎 **MaoneArt Glassmorphism UI**: Tampilan ambient glow Spotify-style dengan modal simetris 2-kolom.
+            - 🎤 **Lirik Realtime & Mode Karaoke**: Sinkronisasi lirik LRCLIB dan minus-one otomatis.
             
-            📥 **Download APK di bawah ini dan instal langsung di Android Anda!**
+            📥 **Download berkas APK di bawah ini dan instal langsung di perangkat Android Anda!**
           files: build/app/outputs/flutter-apk/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

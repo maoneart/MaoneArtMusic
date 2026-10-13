@@ -371,8 +371,10 @@ class PlayerStateNotifier extends ChangeNotifier {
       });
     }
 
-    // D. Perluas antrean dengan lagu-lagu Automix Radio (era, genre & vibe matching) setelah 2.5 detik
-    Future.delayed(const Duration(milliseconds: 2500), () {
+    // D. Perluas antrean dengan lagu-lagu Automix Radio (era, genre & vibe matching)
+    // Jika antrean pendek (seperti dari pencarian lagu), muat radio secepatnya (300ms) agar lagu berikutnya langsung siap
+    final int radioDelayMs = _queue.length <= 1 ? 300 : 2500;
+    Future.delayed(Duration(milliseconds: radioDelayMs), () {
       if (_currentSong?.id == song.id) {
         _checkAndExtendQueue();
       }
@@ -409,7 +411,14 @@ class PlayerStateNotifier extends ChangeNotifier {
 
       if (radioTracks.isNotEmpty) {
         final existingIds = _queue.map((s) => s.id).toSet();
-        final toAdd = radioTracks.where((s) => !existingIds.contains(s.id)).toList();
+        final anchorCleanTitle = anchorSong.title.toLowerCase().trim();
+        final toAdd = radioTracks.where((s) {
+          if (existingIds.contains(s.id)) return false;
+          final sTitle = s.title.toLowerCase().trim();
+          // Filter out duplicate versions of the exact same title (hindari variasi/remix lagu yang sama)
+          if (sTitle == anchorCleanTitle) return false;
+          return true;
+        }).toList();
 
         if (toAdd.isNotEmpty) {
           // Jika mode shuffle aktif, acak urutan lagu yang baru ditambahkan

@@ -469,10 +469,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 InkWell(
                   borderRadius: BorderRadius.circular(20),
                   onTap: () {
-                    final shuffledList = List<Song>.from(musicState.searchResults)..shuffle();
+                    final firstSong = musicState.searchResults.first;
                     ref.read(playerProvider).playSong(
-                          shuffledList.first,
-                          newQueue: shuffledList,
+                          firstSong,
+                          newQueue: [firstSong],
                           index: 0,
                         );
                     Navigator.of(context).push(
@@ -525,8 +525,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 FocusScope.of(context).unfocus();
                 ref.read(playerProvider).playSong(
                       song,
-                      newQueue: musicState.searchResults,
-                      index: index,
+                      newQueue: [song],
+                      index: 0,
                     );
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const PlayerScreen()),
@@ -584,10 +584,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
               InkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: () {
-                  final shuffledList = List<Song>.from(musicState.searchResults)..shuffle();
+                  final firstSong = musicState.searchResults.first;
                   ref.read(playerProvider).playSong(
-                        shuffledList.first,
-                        newQueue: shuffledList,
+                        firstSong,
+                        newQueue: [firstSong],
                         index: 0,
                       );
                   Navigator.of(context).push(
@@ -651,8 +651,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   FocusScope.of(context).unfocus();
                   ref.read(playerProvider).playSong(
                         song,
-                        newQueue: musicState.searchResults,
-                        index: index,
+                        newQueue: [song],
+                        index: 0,
                       );
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (context) => const PlayerScreen()),

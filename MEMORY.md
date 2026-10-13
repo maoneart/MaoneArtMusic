@@ -65,6 +65,14 @@
   3. Memastikan `_player.pause()` segera dipanggil di awal transisi dan `setAudioSource()` selesai terlebih dahulu sebelum `_player.play()` dipanggil.
   4. Versi dinaikkan ke `v1.0.5+6` di `pubspec.yaml`.
 
+### 📻 Smart Search Queue & Automix Radio Transition (v1.0.6+7 - 13 Oktober 2026)
+- **Problem**: Saat mencari lagu (misal "hijau tulus") dan memutar lagu tersebut, antrean lagu berikutnya berisi berbagai variasi/cover/remix dari lagu yang sama ("Hijau" versi live, cover, karaoke) karena seluruh hasil pencarian dimasukkan ke antrean pemutar.
+- **Solusi**:
+  1. Di `search_screen.dart`, saat pengguna memilih lagu hasil pencarian, antrean awal diatur khusus untuk lagu tersebut (`newQueue: [song]`).
+  2. Di `player_provider.dart`, untuk antrean hasil pencarian (panjang antrean 1 lagu), engine Automix Radio (`getAutomixRadioSongs`) langsung dipicu cepat (300ms) untuk mengisi antrean dengan lagu-lagu rekomendasi yang se-era, se-genre, dan se-irama (YouTube Music `RDAMVM$videoId`).
+  3. Ditambahkan filter otomatis untuk menyingkirkan lagu yang memiliki judul identik dengan lagu awal, sehingga lagu berikutnya dipastikan berupa lagu yang berbeda namun tetap selaras genrenya.
+  4. Versi dinaikkan ke `v1.0.6+7` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

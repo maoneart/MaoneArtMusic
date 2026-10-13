@@ -19,10 +19,18 @@
    - Mode Karaoke: Otomatis mendeteksi instrumen minus-one di YouTube.
 4. **CI/CD & APK Release**:
    - Auto Build APK via GitHub Actions `.github/workflows/build_apk.yml` ke GitHub Releases.
+   - Fixed Release Signing Keystore: `android/app/upload-keystore.jks` & `android/key.properties` (alias `maoneart`). Menjamin tanda tangan kriptografi APK identik selamanya sehingga update APK bisa langsung ditimpa (in-place update) tanpa uninstall.
 
 ---
 
 ## 🚀 Recent Milestones
+### 🔑 Permanent Release Keystore & In-Place APK Updates (13 Oktober 2026)
+- **Problem**: Update APK gagal ("Aplikasi tidak terpasang / signature mismatch") karena GitHub Actions memakai debug.keystore acak baru di setiap runner VM.
+- **Solusi**:
+  - Dibuatkan `upload-keystore.jks` (PKCS12 standard, RSA 2048, validity 10.000 hari) dan dikonfigurasikan di `android/app/build.gradle` via `signingConfigs.release`.
+  - Backup kunci disimpan persisten di `~/.keystore_backup/upload-keystore.jks`.
+  - Versi aplikasi dinaikkan ke `v1.0.1+2` di `pubspec.yaml`.
+
 ### 🎛️ Fix Buffering & Native System EQ Intent (13 Oktober 2026)
 - **Problem**:
   - `AudioPipeline(androidAudioEffects: [AndroidEqualizer])` memicu audio sink buffer underrun di ExoPlayer sehingga terjadi infinite buffering.

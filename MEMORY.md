@@ -73,6 +73,21 @@
   3. Ditambahkan filter otomatis untuk menyingkirkan lagu yang memiliki judul identik dengan lagu awal, sehingga lagu berikutnya dipastikan berupa lagu yang berbeda namun tetap selaras genrenya.
   4. Versi dinaikkan ke `v1.0.6+7` di `pubspec.yaml`.
 
+### 🛡️ Reliable Next-Track Stream Failover & Auto-Skip Resiliency (v1.0.7+8 - 13 Oktober 2026)
+- **Problem**: Saat menekan tombol Next, lagu memang berganti tetapi kadang tidak berputar / macet di status loading.
+- **Penyebab**:
+  1. Penggunaan `preload: false` pada `setAudioSource` menyelesaikan panggilan tanpa memvalidasi koneksi jaringan awal. Jika stream kandidat 1 mati atau kena HTTP 403, loop failover salah mengira stream sudah berhasil sehingga stream cadangan (kandidat 2 & 3) tidak pernah dicoba.
+  2. `AudioSource.uri` tidak menyertakan browser User-Agent sehingga Google Video CDN memblokir ExoPlayer dengan HTTP 403 Forbidden.
+  3. Timeout ekstraksi manifest terlalu sempit pada koneksi seluler.
+  4. Race condition pada `_extendArtistRadioQueue()` saat tombol Next ditekan selagi fetch lagu automix radio sedang berjalan.
+- **Solusi**:
+  1. Menghapus `preload: false` pada `setAudioSource` agar failover loop aktif andal: jika stream pertama bermasalah, ExoPlayer langsung melempar error dan loop beralih ke kandidat berikutnya.
+  2. Menambahkan HTTP Headers browser standar (`User-Agent`, `Accept`, `Connection`) pada seluruh panggilan `AudioSource.uri`.
+  3. Menaikkan timeout ekstraksi stream menjadi 15 detik dan manifest fallback menjadi 5-6 detik.
+  4. Menambahkan `Completer<void>? _extendingQueueCompleter` agar panggilan `next()` menunggu antrean automix terisi sebelum menentukan indeks lagu.
+  5. Menambahkan proteksi Auto-Skip `next(isAuto: true)` jika sebuah trek YouTube unplayable agar musik tidak pernah macet.
+  6. Versi dinaikkan ke `v1.0.7+8` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

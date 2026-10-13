@@ -41,6 +41,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   bool _isPlayingOffline = false;
   int _playRequestId = 0;
   bool _isExtendingQueue = false;
+  Completer<void>? _extendingQueueCompleter;
   String? _lastPreloadedSongId;
 
   // 🎤 Smart Hybrid Karaoke State
@@ -278,7 +279,7 @@ class PlayerStateNotifier extends ChangeNotifier {
     try {
       // 6. Fast-Track Stream Extraction (Using RAM/Disk Cache & In-flight Deduplication)
       final candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(_currentSong!, quality: _audioQuality)
-          .timeout(const Duration(seconds: 9));
+          .timeout(const Duration(seconds: 15));
 
       if (_playRequestId != currentRequestId) return;
 
@@ -286,16 +287,24 @@ class PlayerStateNotifier extends ChangeNotifier {
         _status = PlayerLoadingStatus.error;
         _errorMessage = "Gagal menemukan stream '${_currentSong!.title}'. Coba lagu lain.";
         notifyListeners();
+        if (_queue.length > 1) {
+          Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
+        }
         return;
       }
 
-      // 7. Low-Latency Streaming Playback with Immediate Play Trigger
+      // 7. Low-Latency Streaming Playback with Reliable Failover & Browser Headers
       bool sourceSet = false;
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(streamUrl),
+            headers: const {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+              'Connection': 'keep-alive',
+            },
             tag: MediaItem(
               id: _currentSong!.id,
               title: _currentSong!.title,
@@ -306,7 +315,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 12));
+          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 12));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 
@@ -328,6 +337,9 @@ class PlayerStateNotifier extends ChangeNotifier {
         _status = PlayerLoadingStatus.error;
         _errorMessage = "Gagal memuat format audio untuk '${_currentSong!.title}'.";
         notifyListeners();
+        if (_queue.length > 1) {
+          Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
+        }
         return;
       }
 
@@ -340,6 +352,9 @@ class PlayerStateNotifier extends ChangeNotifier {
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar audio. Periksa koneksi internet.";
       notifyListeners();
+      if (_queue.length > 1) {
+        Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
+      }
     }
   }
 
@@ -400,8 +415,14 @@ class PlayerStateNotifier extends ChangeNotifier {
   }
 
   Future<void> _extendArtistRadioQueue(Song anchorSong) async {
-    if (_isExtendingQueue) return;
+    if (_isExtendingQueue) {
+      if (_extendingQueueCompleter != null) {
+        await _extendingQueueCompleter!.future;
+      }
+      return;
+    }
     _isExtendingQueue = true;
+    _extendingQueueCompleter = Completer<void>();
 
     try {
       final radioTracks = await _musicService.getAutomixRadioSongs(
@@ -440,6 +461,10 @@ class PlayerStateNotifier extends ChangeNotifier {
       print("Automix radio extend notice: $e");
     } finally {
       _isExtendingQueue = false;
+      if (_extendingQueueCompleter != null && !_extendingQueueCompleter!.isCompleted) {
+        _extendingQueueCompleter!.complete();
+      }
+      _extendingQueueCompleter = null;
     }
   }
 
@@ -668,6 +693,11 @@ class PlayerStateNotifier extends ChangeNotifier {
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(url),
+            headers: const {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': '*/*',
+              'Connection': 'keep-alive',
+            },
             tag: MediaItem(
               id: baseSong.id,
               title: "${baseSong.title} (Karaoke)",
@@ -755,6 +785,11 @@ class PlayerStateNotifier extends ChangeNotifier {
           try {
             final audioSource = AudioSource.uri(
               Uri.parse(url),
+              headers: const {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': '*/*',
+                'Connection': 'keep-alive',
+              },
               tag: MediaItem(
                 id: baseSong.id,
                 title: baseSong.title,

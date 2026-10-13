@@ -175,13 +175,13 @@ class YoutubeAudioExtractor {
               ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
               requireWatchPage: false,
             )
-            .timeout(const Duration(seconds: 4));
+            .timeout(const Duration(seconds: 6));
       } catch (e) {
         // Fallback to standard web client if needed
         try {
           manifest = await _yt.videos.streamsClient
               .getManifest(directVideoId)
-              .timeout(const Duration(seconds: 4));
+              .timeout(const Duration(seconds: 6));
         } catch (_) {}
       }
 
@@ -254,12 +254,12 @@ class YoutubeAudioExtractor {
                     ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
                     requireWatchPage: false,
                   )
-                  .timeout(const Duration(seconds: 3));
+                  .timeout(const Duration(seconds: 5));
             } catch (_) {
               try {
                 manifest = await _yt.videos.streamsClient
                     .getManifest(video.id.value)
-                    .timeout(const Duration(seconds: 3));
+                    .timeout(const Duration(seconds: 5));
               } catch (_) {}
             }
 

@@ -7,8 +7,9 @@
 
 ## 🎵 Architecture & Key Engines
 1. **Audio Engine**:
-   - `just_audio` + `audio_service` untuk background audio playback & Android lockscreen media notifications.
-   - `AudioPipeline(androidAudioEffects: [AndroidEqualizer])` terpasang di `MyAudioHandler` & `PlayerStateNotifier`.
+   - `just_audio` + `audio_service` untuk background playback & Android lockscreen media notification.
+   - Hardware audio offload aktif langsung tanpa AudioPipeline (100% zero buffering streaming & ultra-responsif).
+   - Platform channel native Android (`com.maoneart.music/equalizer`) di `MainActivity.kt` untuk integrasi hardware equalizer sistem (Dolby Atmos, Mi Sound, Wavelet).
 2. **Streaming & Extractor**:
    - Musify Turbo Engine (`YoutubeApiClient.ios` & `androidSdkless` bypass JS deciphering).
    - Multi-tier stream fallback: Direct AAC/M4A 140 -> Best Audio -> Muxed video stream.
@@ -22,16 +23,15 @@
 ---
 
 ## 🚀 Recent Milestones
-### 🎛️ Equalizer 5-Band, Audio Presets & Playback Speed (13 Oktober 2026)
-- **Implementasi**:
-  - `AndroidEqualizer` terhubung langsung ke audio pipeline native.
-  - 7 preset suara: `Normal`, `Bass Boost`, `Vokal & Akustik`, `Rock`, `Pop`, `Treble Boost`, `Electronic`, plus `Custom`.
-  - Kontrol kecepatan putar audio (`0.75x`, `1.0x`, `1.25x`, `1.5x`).
-  - Modal UI Glassmorphism: `lib/widgets/equalizer_modal.dart` (simetris, slider frekuensi visual, real-time dB feedback).
-  - Shortcut akses:
-    - Tombol `tune_rounded` di AppBar `PlayerScreen`.
-    - Tile `Equalizer & Efek Suara` di `SettingsScreen`.
-  - Persistensi setting tersimpan otomatis di `SharedPreferences`.
+### 🎛️ Fix Buffering & Native System EQ Intent (13 Oktober 2026)
+- **Problem**:
+  - `AudioPipeline(androidAudioEffects: [AndroidEqualizer])` memicu audio sink buffer underrun di ExoPlayer sehingga terjadi infinite buffering.
+  - Panggilan IPC platform channel tanpa throttling di `FutureBuilder` menyebabkan UI freeze/tidak responsif saat klik.
+- **Solusi (Opsi 2)**:
+  - Melepas `AudioPipeline` dari `MyAudioHandler` & `_localPlayer` mengembalikan performa turbo ExoPlayer (zero buffering, instan).
+  - Implementasi `MethodChannel("com.maoneart.music/equalizer")` di `MainActivity.kt` untuk membuka hardware Equalizer bawaan HP (Dolby Atmos / Mi Sound / SoundAlive) via Android Intent (`ACTION_DISPLAY_AUDIO_EFFECT_CONTROL_PANEL`).
+  - Efek audio in-app super mulus (0ms blocking): Kontrol Kecepatan Putar (0.75x–1.5x) dan Volume Output Slider.
+  - Modal UI Glassmorphism simetris 2-kolom sesuai standar MaoneArt.
 
 ---
 

@@ -1,7 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 import '../providers/player_provider.dart';
 import '../theme/maoneart_theme.dart';
 
@@ -21,22 +20,11 @@ class EqualizerModal extends ConsumerStatefulWidget {
 }
 
 class _EqualizerModalState extends ConsumerState<EqualizerModal> {
-  final List<String> _presetNames = [
-    'Normal',
-    'Bass Boost',
-    'Vokal & Akustik',
-    'Rock',
-    'Pop',
-    'Treble Boost',
-    'Electronic',
-  ];
-
   final List<double> _speedOptions = [0.75, 1.0, 1.25, 1.5];
 
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
-    final eq = playerState.equalizer;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -46,7 +34,7 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
-            constraints: const BoxConstraints(maxHeight: 680),
+            constraints: const BoxConstraints(maxHeight: 640),
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: const Color(0xFF141927).withOpacity(0.94),
@@ -93,7 +81,7 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            "Sesuaikan karakter output audio",
+                            "Hardware Equalizer Sistem & Efek Suara",
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.white.withOpacity(0.6),
@@ -102,23 +90,16 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                         ],
                       ),
                     ),
-                    // Toggle Switch
-                    Switch(
-                      value: playerState.isEqualizerEnabled,
-                      activeColor: MaoneArtTheme.primaryCyan,
-                      activeTrackColor: MaoneArtTheme.primaryCyan.withOpacity(0.35),
-                      inactiveThumbColor: Colors.white60,
-                      inactiveTrackColor: Colors.white12,
-                      onChanged: (val) {
-                        ref.read(playerProvider).setEqualizerEnabled(val);
-                      },
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white54, size: 20),
+                      onPressed: () => Navigator.of(context).pop(),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 14),
                 const Divider(color: Colors.white12, height: 1),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
 
                 // 2. Scrollable Body
                 Flexible(
@@ -127,160 +108,136 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Preset Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              "PRESET AUDIO",
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.1,
-                                color: MaoneArtTheme.primaryCyan,
-                              ),
+                        // Card Equalizer Bawaan HP (Hardware EQ)
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                MaoneArtTheme.primaryCyan.withOpacity(0.12),
+                                MaoneArtTheme.primaryPurple.withOpacity(0.10),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: MaoneArtTheme.primaryPurple.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: MaoneArtTheme.primaryPurple.withOpacity(0.4),
-                                  width: 0.8,
-                                ),
-                              ),
-                              child: Text(
-                                playerState.equalizerPreset.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
+                              width: 1,
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-
-                        // Preset Chips (Horizontal List)
-                        SizedBox(
-                          height: 36,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: _presetNames.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (context, index) {
-                              final name = _presetNames[index];
-                              final isSelected = playerState.equalizerPreset == name;
-
-                              return InkWell(
-                                onTap: playerState.isEqualizerEnabled
-                                    ? () {
-                                        ref.read(playerProvider).setEqualizerPreset(name);
-                                      }
-                                    : null,
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? MaoneArtTheme.primaryCyan.withOpacity(0.22)
-                                        : Colors.white.withOpacity(0.06),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? MaoneArtTheme.primaryCyan
-                                          : Colors.white.withOpacity(0.12),
-                                      width: 1,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: MaoneArtTheme.spotifyGreenBright.withOpacity(0.2),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(
+                                      Icons.headphones_rounded,
+                                      color: MaoneArtTheme.spotifyGreenBright,
+                                      size: 20,
                                     ),
                                   ),
-                                  child: Center(
-                                    child: Text(
-                                      name,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                        color: isSelected ? Colors.white : Colors.white70,
+                                  const SizedBox(width: 10),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          "Equalizer Bawaan HP",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        SizedBox(height: 2),
+                                        Text(
+                                          "Dolby Atmos / Mi Sound / Wavelet",
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: MaoneArtTheme.spotifyGreenBright,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                "Gunakan hardware equalizer sistem bawaan ponsel Anda untuk pemrosesan audio 10-band studio tanpa beban buffering atau lag streaming.",
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Colors.white.withOpacity(0.7),
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 42,
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [MaoneArtTheme.primaryCyan, MaoneArtTheme.primaryPurple],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
                                       ),
                                     ),
+                                    icon: const Icon(Icons.tune_rounded, size: 18, color: Colors.white),
+                                    label: const Text(
+                                      "Buka Equalizer Sistem",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    onPressed: () async {
+                                      final opened = await ref.read(playerProvider).openSystemEqualizer();
+                                      if (!opened && mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            backgroundColor: const Color(0xFF1E2638),
+                                            content: const Text(
+                                              "Equalizer sistem tidak ditemukan (Bisa gunakan aplikasi Wavelet / Dolby Atmos).",
+                                              style: TextStyle(color: Colors.white, fontSize: 13),
+                                            ),
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                          ),
+                                        );
+                                      }
+                                    },
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                            ],
                           ),
                         ),
 
-                        const SizedBox(height: 18),
+                        const SizedBox(height: 20),
 
-                        // Equalizer Bands Section
-                        const Text(
-                          "FREKUENSI SUARA (5-BAND)",
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1,
-                            color: MaoneArtTheme.spotifyGreenBright,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // FutureBuilder for parameters
-                        if (eq != null)
-                          FutureBuilder<AndroidEqualizerParameters>(
-                            future: eq.parameters,
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: 24),
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: MaoneArtTheme.primaryCyan,
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final params = snapshot.data;
-                              if (params != null && params.bands.isNotEmpty) {
-                                return Column(
-                                  children: params.bands.map((band) {
-                                    final freq = band.centerFrequency.round();
-                                    final freqLabel = freq >= 1000
-                                        ? '${(freq / 1000).toStringAsFixed(1)} kHz'
-                                        : '$freq Hz';
-
-                                    return _buildBandSlider(
-                                      index: band.index,
-                                      label: freqLabel,
-                                      currentGain: band.gain,
-                                      minGain: params.minDecibels,
-                                      maxGain: params.maxDecibels,
-                                      isEnabled: playerState.isEqualizerEnabled,
-                                      onChanged: (newGain) {
-                                        ref.read(playerProvider).setBandGain(band.index, newGain);
-                                      },
-                                    );
-                                  }).toList(),
-                                );
-                              }
-
-                              return _buildFallbackSliders(playerState);
-                            },
-                          )
-                        else
-                          _buildFallbackSliders(playerState),
-
-                        const SizedBox(height: 18),
-
-                        // 3. Playback Speed Section
+                        // Section 2: Kecepatan Putar (Playback Speed)
                         Row(
                           children: [
                             const Icon(
                               Icons.speed_rounded,
-                              size: 15,
+                              size: 16,
                               color: MaoneArtTheme.primaryCyan,
                             ),
                             const SizedBox(width: 6),
@@ -322,19 +279,19 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                                     padding: const EdgeInsets.symmetric(vertical: 8),
                                     decoration: BoxDecoration(
                                       color: isCurrent
-                                          ? MaoneArtTheme.primaryPurple.withOpacity(0.3)
+                                          ? MaoneArtTheme.primaryCyan.withOpacity(0.25)
                                           : Colors.white.withOpacity(0.06),
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
                                         color: isCurrent
-                                            ? MaoneArtTheme.primaryPurple
+                                            ? MaoneArtTheme.primaryCyan
                                             : Colors.white.withOpacity(0.12),
                                         width: 1,
                                       ),
                                     ),
                                     child: Center(
                                       child: Text(
-                                        speed == 1.0 ? "1.0x (Normal)" : "${speed}x",
+                                        speed == 1.0 ? "1.0x Normal" : "${speed}x",
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
@@ -347,6 +304,78 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                               ),
                             );
                           }).toList(),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Section 3: Volume Pemutar (Gain Tuning)
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.volume_up_rounded,
+                              size: 16,
+                              color: MaoneArtTheme.spotifyGreenBright,
+                            ),
+                            const SizedBox(width: 6),
+                            const Text(
+                              "VOLUME OUTPUT PEMUTAR",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.1,
+                                color: MaoneArtTheme.spotifyGreenBright,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              "${(playerState.volume * 100).toInt()}%",
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.04),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.06),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.volume_mute_rounded, size: 18, color: Colors.white38),
+                              Expanded(
+                                child: SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    trackHeight: 3,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                                    activeTrackColor: MaoneArtTheme.primaryCyan,
+                                    inactiveTrackColor: Colors.white12,
+                                    thumbColor: MaoneArtTheme.spotifyGreenBright,
+                                    overlayColor: MaoneArtTheme.primaryCyan.withOpacity(0.2),
+                                  ),
+                                  child: Slider(
+                                    value: playerState.volume.clamp(0.0, 1.0),
+                                    min: 0.0,
+                                    max: 1.0,
+                                    onChanged: (val) {
+                                      ref.read(playerProvider).setVolume(val);
+                                    },
+                                  ),
+                                ),
+                              ),
+                              const Icon(Icons.volume_up_rounded, size: 18, color: MaoneArtTheme.spotifyGreenBright),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -376,7 +405,7 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
                             style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                           onPressed: () {
-                            ref.read(playerProvider).resetEqualizer();
+                            ref.read(playerProvider).resetAudioEffects();
                           },
                         ),
                       ),
@@ -420,105 +449,6 @@ class _EqualizerModalState extends ConsumerState<EqualizerModal> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBandSlider({
-    required int index,
-    required String label,
-    required double currentGain,
-    required double minGain,
-    required double maxGain,
-    required bool isEnabled,
-    required ValueChanged<double> onChanged,
-  }) {
-    final displayGain = currentGain > 0
-        ? '+${currentGain.toStringAsFixed(1)} dB'
-        : '${currentGain.toStringAsFixed(1)} dB';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.06),
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 68,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isEnabled ? Colors.white : Colors.white38,
-              ),
-            ),
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 3,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                activeTrackColor: isEnabled ? MaoneArtTheme.primaryCyan : Colors.white24,
-                inactiveTrackColor: Colors.white12,
-                thumbColor: isEnabled ? MaoneArtTheme.spotifyGreenBright : Colors.white38,
-                overlayColor: MaoneArtTheme.primaryCyan.withOpacity(0.2),
-              ),
-              child: Slider(
-                value: currentGain.clamp(minGain, maxGain),
-                min: minGain,
-                max: maxGain,
-                onChanged: isEnabled ? onChanged : null,
-              ),
-            ),
-          ),
-          SizedBox(
-            width: 62,
-            child: Text(
-              displayGain,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: isEnabled
-                    ? (currentGain > 0 ? MaoneArtTheme.spotifyGreenBright : Colors.white70)
-                    : Colors.white38,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFallbackSliders(PlayerStateNotifier playerState) {
-    final fallbackFreqs = ['60 Hz', '230 Hz', '910 Hz', '3.6 kHz', '14 kHz'];
-    final presetValues = PlayerStateNotifier.equalizerPresets[playerState.equalizerPreset] ??
-        [0.0, 0.0, 0.0, 0.0, 0.0];
-
-    return Column(
-      children: List.generate(fallbackFreqs.length, (i) {
-        final gain = playerState.bandGains[i] ?? (i < presetValues.length ? presetValues[i] : 0.0);
-
-        return _buildBandSlider(
-          index: i,
-          label: fallbackFreqs[i],
-          currentGain: gain,
-          minGain: -10.0,
-          maxGain: 10.0,
-          isEnabled: playerState.isEqualizerEnabled,
-          onChanged: (newGain) {
-            ref.read(playerProvider).setBandGain(i, newGain);
-          },
-        );
-      }),
     );
   }
 }

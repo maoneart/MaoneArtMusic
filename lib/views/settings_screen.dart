@@ -539,7 +539,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Column(
                   children: [
                     Text(
-                      "MaoneArt Music v1.0.0",
+                      "MaoneArt Music v1.0.1",
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,

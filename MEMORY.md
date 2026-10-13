@@ -38,6 +38,7 @@
   - Ditambahkan izin `<uses-permission android:name="android.permission.RECORD_AUDIO"/>` di `AndroidManifest.xml` serta tombol aktivasi izin cepat di visualizer deck ("Sinkronkan FFT Asli").
   - Dibangun algoritma cadangan **Musical Beat-Sync Engine** (128 BPM 4/4 meter) berbasis `position.inMilliseconds` untuk sinkronisasi transient kick (beat 1 & 3), snare/clap (beat 2 & 4), dan 8th-note hi-hats secara dinamis saat FFT native dalam mode idle.
   - Parameter `position` dan `sessionId` diteruskan dari `player_screen.dart` dan `mini_player.dart` ke visualizer.
+  - Perbaikan compile snapshot: menghapus modifier `const` pada pembungkus `NeonMiniVisualizerStrip` di `mini_player.dart`.
   - Versi aplikasi dinaikkan ke `v1.0.3+4` di `pubspec.yaml`.
 
 ---

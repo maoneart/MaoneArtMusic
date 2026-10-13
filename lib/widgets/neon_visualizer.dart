@@ -45,6 +45,7 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
   List<double> _currentBands = List.filled(24, 0.1);
   bool _isNativeActive = false;
   bool _hasPermission = false;
+  int _lastFftTimestamp = 0;
 
   @override
   void initState() {
@@ -55,77 +56,66 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
       duration: const Duration(milliseconds: 1600),
     )..repeat();
 
-    _initNativeVisualizer();
+    _autoStartVisualizer();
   }
 
   @override
   void didUpdateWidget(covariant NeonVisualizerDeck oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.sessionId != oldWidget.sessionId || widget.isPlaying != oldWidget.isPlaying) {
-      if (widget.isPlaying && _hasPermission) {
-        _startNativeStream();
+    if (widget.sessionId != oldWidget.sessionId) {
+      _visualizerChannel.invokeMethod('startVisualizer', {'sessionId': widget.sessionId}).catchError((_) {});
+    }
+    if (widget.isPlaying != oldWidget.isPlaying) {
+      if (widget.isPlaying) {
+        if (_streamSubscription == null) {
+          _startNativeStream();
+        }
       }
     }
   }
 
-  Future<void> _initNativeVisualizer() async {
+  Future<void> _autoStartVisualizer() async {
     try {
       final hasPerm = await _visualizerChannel.invokeMethod<bool>('hasPermission') ?? false;
-      if (mounted) {
-        setState(() {
-          _hasPermission = hasPerm;
-        });
-      }
-      if (hasPerm && widget.isPlaying) {
-        _startNativeStream();
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _requestPermissionAndStart() async {
-    try {
-      final granted = await _visualizerChannel.invokeMethod<bool>('requestPermission') ?? false;
-      if (mounted) {
-        setState(() {
+      if (!hasPerm) {
+        final granted = await _visualizerChannel.invokeMethod<bool>('requestPermission') ?? false;
+        if (mounted) {
           _hasPermission = granted;
-        });
+        }
+      } else {
+        if (mounted) {
+          _hasPermission = true;
+        }
       }
-      if (granted) {
-        _startNativeStream();
-      }
-    } catch (e) {
-      debugPrint("requestPermission error: $e");
+      _startNativeStream();
+    } catch (_) {
+      _startNativeStream();
     }
   }
 
-  void _startNativeStream() async {
+  void _startNativeStream() {
     try {
-      await _visualizerChannel.invokeMethod('startVisualizer', {'sessionId': widget.sessionId});
-      _streamSubscription?.cancel();
+      _visualizerChannel.invokeMethod('startVisualizer', {'sessionId': widget.sessionId}).catchError((_) {});
+      if (_streamSubscription != null) return;
       _streamSubscription = _streamChannel.receiveBroadcastStream().listen(
         (data) {
           if (data is List && mounted) {
             final raw = data.map((e) => (e as num).toDouble()).toList();
             if (raw.isNotEmpty) {
-              final newBands = List<double>.filled(24, 0.0);
+              _lastFftTimestamp = DateTime.now().millisecondsSinceEpoch;
               for (int i = 0; i < 24; i++) {
                 final target = i < raw.length ? raw[i] : 0.0;
-                // Fast attack, smooth decay (Exponential Smoothing)
-                newBands[i] = (_currentBands[i] * 0.45) + (target * 0.55);
+                // Fast attack, smooth decay
+                _currentBands[i] = (_currentBands[i] * 0.4) + (target * 0.6);
               }
-              setState(() {
-                _currentBands = newBands;
+              if (!_isNativeActive) {
                 _isNativeActive = true;
-              });
+              }
             }
           }
         },
         onError: (err) {
-          if (mounted) {
-            setState(() {
-              _isNativeActive = false;
-            });
-          }
+          _isNativeActive = false;
         },
       );
     } catch (e) {
@@ -149,8 +139,18 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
 
   /// Calculates real musical tempo and beat-reactive rhythm when native FFT is idle
   List<double> _getRhythmicBands() {
-    if (_isNativeActive && widget.isPlaying) {
-      return _currentBands;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final bool isFftFresh = (now - _lastFftTimestamp) < 350;
+
+    if (_isNativeActive && widget.isPlaying && isFftFresh) {
+      double sum = 0.0;
+      for (final b in _currentBands) {
+        sum += b;
+      }
+      // If native FFT is outputting actual audio energy, use it!
+      if (sum > 0.25) {
+        return _currentBands;
+      }
     }
 
     if (!widget.isPlaying) {
@@ -216,55 +216,53 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
         children: [
           // 1. Top Mode Selector Bar
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: MaoneArtTheme.primaryCyan.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: MaoneArtTheme.primaryCyan.withOpacity(0.4),
-                        width: 1,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.graphic_eq_rounded,
-                      color: MaoneArtTheme.primaryCyan,
-                      size: 16,
-                    ),
+              Container(
+                padding: const EdgeInsets.all(5),
+                decoration: BoxDecoration(
+                  color: MaoneArtTheme.primaryCyan.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: MaoneArtTheme.primaryCyan.withOpacity(0.4),
+                    width: 1,
                   ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    "NEON VISUALIZER",
-                    style: TextStyle(
-                      fontSize: 12,
-                      letterSpacing: 1.5,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+                ),
+                child: const Icon(
+                  Icons.graphic_eq_rounded,
+                  color: MaoneArtTheme.primaryCyan,
+                  size: 14,
+                ),
               ),
-
-              // Mode Pills
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildTypePill("Bars", NeonVisualizerType.bars),
-                  const SizedBox(width: 6),
-                  _buildTypePill("Waves", NeonVisualizerType.waves),
-                  const SizedBox(width: 6),
-                  _buildTypePill("Pulse", NeonVisualizerType.pulse),
-                ],
+              const SizedBox(width: 6),
+              const Text(
+                "VISUALIZER",
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const Spacer(),
+              // Mode Segmented Pills
+              Container(
+                padding: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.08),
+                    width: 0.8,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildTypePill("Bars", NeonVisualizerType.bars),
+                    _buildTypePill("Waves", NeonVisualizerType.waves),
+                    _buildTypePill("Pulse", NeonVisualizerType.pulse),
+                  ],
+                ),
               ),
             ],
           ),
@@ -286,7 +284,7 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
 
           const SizedBox(height: 8),
 
-          // 3. Audio Rhythm Status & Hardware FFT Trigger
+          // 3. Audio Rhythm Status Badge
           _buildRhythmStatusBadge(),
         ],
       ),
@@ -302,24 +300,24 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
         });
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: isSelected
-              ? MaoneArtTheme.primaryCyan.withOpacity(0.2)
-              : Colors.white.withOpacity(0.06),
+              ? MaoneArtTheme.primaryCyan.withOpacity(0.25)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? MaoneArtTheme.primaryCyan
-                : Colors.white.withOpacity(0.12),
-            width: isSelected ? 1.2 : 0.8,
-          ),
+          border: isSelected
+              ? Border.all(
+                  color: MaoneArtTheme.primaryCyan.withOpacity(0.7),
+                  width: 1,
+                )
+              : null,
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
-                    blurRadius: 8,
+                    color: MaoneArtTheme.primaryCyan.withOpacity(0.25),
+                    blurRadius: 6,
                   ),
                 ]
               : null,
@@ -329,7 +327,7 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
           style: TextStyle(
             fontSize: 10,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-            color: isSelected ? MaoneArtTheme.primaryCyan : Colors.white70,
+            color: isSelected ? Colors.white : Colors.white60,
           ),
         ),
       ),
@@ -337,107 +335,62 @@ class _NeonVisualizerDeckState extends State<NeonVisualizerDeck> with SingleTick
   }
 
   Widget _buildRhythmStatusBadge() {
-    if (_isNativeActive && widget.isPlaying) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: MaoneArtTheme.primaryCyan.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.4), width: 0.8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 7,
-              height: 7,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: MaoneArtTheme.primaryCyan,
-                boxShadow: [
-                  BoxShadow(
-                    color: MaoneArtTheme.primaryCyan.withOpacity(0.9),
-                    blurRadius: 6,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 6),
-            const Text(
-              "IRAMA AUDIO ASLI AKTIF (HARDWARE FFT)",
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.0,
-                color: MaoneArtTheme.primaryCyan,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final bool isFftFresh = (now - _lastFftTimestamp) < 400;
+    final bool isHardwareFftActive = _isNativeActive && isFftFresh && widget.isPlaying;
 
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.isPlaying ? MaoneArtTheme.accentGreen : Colors.white38,
-            boxShadow: widget.isPlaying
-                ? [
-                    BoxShadow(
-                      color: MaoneArtTheme.accentGreen.withOpacity(0.8),
-                      blurRadius: 6,
-                      spreadRadius: 1,
-                    ),
-                  ]
-                : null,
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isHardwareFftActive
+            ? MaoneArtTheme.primaryCyan.withOpacity(0.12)
+            : Colors.white.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isHardwareFftActive
+              ? MaoneArtTheme.primaryCyan.withOpacity(0.35)
+              : Colors.white.withOpacity(0.08),
+          width: 0.8,
         ),
-        const SizedBox(width: 6),
-        Text(
-          widget.isPlaying ? "BEAT SYNC AKTIF (128 BPM)" : "PAUSED (IDLE PULSE)",
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.0,
-            color: widget.isPlaying ? MaoneArtTheme.accentGreen : Colors.white38,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: !widget.isPlaying
+                  ? Colors.white38
+                  : (isHardwareFftActive ? MaoneArtTheme.primaryCyan : MaoneArtTheme.accentGreen),
+              boxShadow: widget.isPlaying
+                  ? [
+                      BoxShadow(
+                        color: (isHardwareFftActive ? MaoneArtTheme.primaryCyan : MaoneArtTheme.accentGreen).withOpacity(0.8),
+                        blurRadius: 5,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : null,
+            ),
           ),
-        ),
-        if (!_hasPermission && widget.isPlaying) ...[
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: _requestPermissionAndStart,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: MaoneArtTheme.primaryPurple.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: MaoneArtTheme.primaryPurple, width: 0.8),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.mic, size: 10, color: Colors.white),
-                  SizedBox(width: 3),
-                  Text(
-                    "Sinkronkan FFT Asli",
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
+          const SizedBox(width: 6),
+          Text(
+            !widget.isPlaying
+                ? "PAUSED"
+                : (isHardwareFftActive ? "REAL-TIME FFT SPECTRUM" : "BEAT-SYNC ACTIVE"),
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: !widget.isPlaying
+                  ? Colors.white38
+                  : (isHardwareFftActive ? MaoneArtTheme.primaryCyan : MaoneArtTheme.accentGreen),
             ),
           ),
         ],
-      ],
+      ),
     );
   }
 

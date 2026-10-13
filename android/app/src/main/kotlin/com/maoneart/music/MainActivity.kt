@@ -26,6 +26,10 @@ class MainActivity: AudioServiceActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pendingPermissionResult: MethodChannel.Result? = null
     private val PERMISSION_REQ_CODE = 404
+    @Volatile
+    private var isDispatchingFft = false
+    private var lastFftTime = 0L
+    private var currentActiveSession = -1
 
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -101,6 +105,7 @@ class MainActivity: AudioServiceActivity() {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
+                    startNativeVisualizer(0)
                 }
 
                 override fun onCancel(arguments: Any?) {
@@ -115,11 +120,14 @@ class MainActivity: AudioServiceActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return false
         }
+        val targetSession = if (sessionId != 0) sessionId else 0
+        if (visualizer != null && currentActiveSession == targetSession) {
+            return true
+        }
         stopNativeVisualizer()
         return try {
-            // Priority: Target audioSessionId, fallback to 0 (Global audio mix)
             val v = try {
-                Visualizer(if (sessionId != 0) sessionId else 0)
+                Visualizer(targetSession)
             } catch (e: Exception) {
                 Visualizer(0)
             }
@@ -136,6 +144,11 @@ class MainActivity: AudioServiceActivity() {
 
                 override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, samplingRate: Int) {
                     if (fft == null || eventSink == null) return
+                    val now = System.currentTimeMillis()
+                    if (now - lastFftTime < 33) return // Cap at 30 FPS to avoid looper overload
+                    if (isDispatchingFft) return // Prevent looper queue congestion
+                    isDispatchingFft = true
+                    lastFftTime = now
 
                     // Process FFT into 24 normalized frequency bands (0.0 to 1.0)
                     val bands = ArrayList<Double>(24)
@@ -158,16 +171,24 @@ class MainActivity: AudioServiceActivity() {
                     }
 
                     mainHandler.post {
-                        eventSink?.success(bands)
+                        try {
+                            eventSink?.success(bands)
+                        } catch (e: Exception) {
+                            // Ignored
+                        } finally {
+                            isDispatchingFft = false
+                        }
                     }
                 }
             }, rate, false, true)
 
             v.enabled = true
             visualizer = v
+            currentActiveSession = targetSession
             true
         } catch (e: Exception) {
             e.printStackTrace()
+            currentActiveSession = -1
             false
         }
     }
@@ -180,6 +201,8 @@ class MainActivity: AudioServiceActivity() {
             }
         } catch (e: Exception) {}
         visualizer = null
+        currentActiveSession = -1
+        isDispatchingFft = false
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -188,6 +211,9 @@ class MainActivity: AudioServiceActivity() {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             pendingPermissionResult?.success(granted)
             pendingPermissionResult = null
+            if (granted && eventSink != null) {
+                startNativeVisualizer(0)
+            }
         }
     }
 

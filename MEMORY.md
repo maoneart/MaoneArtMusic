@@ -41,6 +41,18 @@
   - Perbaikan compile snapshot: menghapus modifier `const` pada pembungkus `NeonMiniVisualizerStrip` di `mini_player.dart`.
   - Versi aplikasi dinaikkan ke `v1.0.3+4` di `pubspec.yaml`.
 
+### 🛡️ Visualizer Auto-Start, Anti-Freeze & Layout Optimization (v1.0.4+5 - 13 Oktober 2026)
+- **Problem**:
+  1. Visualizer tidak langsung aktif (harus klik tombol manual "Sinkronkan FFT Asli").
+  2. Sering macet/freeze (akibat setState 30 FPS di EventChannel listener dan race condition antara cancel stream vs native visualizer release).
+  3. Teks tombol mode ("Bars", "Waves", "Pulse") terpotong di layar HP sempit akibat overflow header Row.
+- **Solusi**:
+  1. **Auto-Start**: Visualizer otomatis mendeteksi dan meminta izin serta langsung streaming di `initState()` tanpa perlu klik tombol lagi.
+  2. **Anti-Freeze Watchdog**: Menghapus `setState()` berfrekuensi tinggi di EventChannel listener (dijalankan langsung di memori dan di-render oleh `AnimatedBuilder` 60 FPS). Menambahkan watchdog timestamp (`_lastFftTimestamp`) dengan fallback mulus ke *Musical Beat-Sync Engine* jika audio FFT jeda/senyap sehingga animasi TIDAK AKAN PERNAH macet.
+  3. **Android Looper Throttling**: Membatasi event capture di 30 FPS dan proteksi antrian `@Volatile isDispatchingFft` di `MainActivity.kt`.
+  4. **Responsive Segmented Pills**: Mengubah pill selector menjadi segmented container kompak yang tidak akan pernah terpotong di layar HP mana pun.
+  5. Versi dinaikkan ke `v1.0.4+5` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

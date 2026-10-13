@@ -18,11 +18,11 @@ enum PlayerLoadingStatus { idle, loading, playing, paused, error }
 enum MusicRepeatMode { off, all, one }
 
 class PlayerStateNotifier extends ChangeNotifier {
-  late final AudioPlayer _localPlayer;
+  AudioPlayer? _fallbackPlayer;
   final StorageService _storageService = StorageService();
   final MusicService _musicService = MusicService();
 
-  AudioPlayer get _player => globalAudioHandler?.player ?? _localPlayer;
+  AudioPlayer get _player => globalAudioHandler?.player ?? (_fallbackPlayer ??= AudioPlayer());
 
   Song? _currentSong;
   List<Song> _queue = [];
@@ -85,16 +85,6 @@ class PlayerStateNotifier extends ChangeNotifier {
   AudioPlayer get audioPlayer => _player;
 
   PlayerStateNotifier() {
-    _localPlayer = AudioPlayer(
-      audioLoadConfiguration: const AudioLoadConfiguration(
-        androidLoadControl: AndroidLoadControl(
-          maxBufferDuration: Duration(seconds: 60),
-          bufferForPlaybackDuration: Duration(milliseconds: 250),
-          bufferForPlaybackAfterRebufferDuration: Duration(seconds: 2),
-        ),
-      ),
-    );
-
     _initListeners();
     _bindGlobalHandlerCallbacks();
     _loadAudioPreferences();
@@ -198,9 +188,8 @@ class PlayerStateNotifier extends ChangeNotifier {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 🛑 0. Musify Non-Blocking Transition: Jangan matikan (stop) pipeline codec audio.
-    // Cukup pause cepat tanpa await agar transisi ke setAudioSource instan dan mulus
-    if (!isAutoTransition && _player.playing) {
+    // 🛑 0. Immediate Pause of prior playback so old audio NEVER overlaps
+    if (!isAutoTransition) {
       _player.pause();
     }
 
@@ -271,9 +260,9 @@ class PlayerStateNotifier extends ChangeNotifier {
 
         if (_playRequestId != currentRequestId) return;
 
-        _player.play();
         await _player.setAudioSource(audioSource, preload: false);
         if (_playRequestId != currentRequestId) return;
+        await _player.play();
 
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
@@ -317,10 +306,9 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          // ⚡ Musify Method: Segera panggil play() dan setAudioSource tanpa blocking buffer
-          _player.play();
           await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 12));
           if (_playRequestId != currentRequestId) return;
+          await _player.play();
 
           sourceSet = true;
           _status = PlayerLoadingStatus.playing;
@@ -856,7 +844,7 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
-    _localPlayer.dispose();
+    _fallbackPlayer?.dispose();
     super.dispose();
   }
 }

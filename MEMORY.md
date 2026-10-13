@@ -53,6 +53,18 @@
   4. **Responsive Segmented Pills**: Mengubah pill selector menjadi segmented container kompak yang tidak akan pernah terpotong di layar HP mana pun.
   5. Versi dinaikkan ke `v1.0.4+5` di `pubspec.yaml`.
 
+### 🔇 Single-Instance Playback & Anti-Overlap Fix (v1.0.5+6 - 13 Oktober 2026)
+- **Problem**: Pengguna melaporkan suara lagu dobel (2 atau bahkan 3 trek lagu yang sama berbunyi bersamaan).
+- **Penyebab**:
+  1. `AndroidManifest.xml` memiliki `android:taskAffinity=""` & `launchMode="singleTop"`: Setiap kali user membuka app dari home screen/notifikasi saat audio berjalan, Android meluncurkan task/Activity baru dan instance Flutter Engine baru, membuat instance lama dan baru memutar audio bersamaan.
+  2. `PlayerStateNotifier` mengalokasikan `_localPlayer = AudioPlayer()` secara terpisah dari `globalAudioHandler.player`, memicu redundansi player native ExoPlayer.
+  3. `playSong()` memanggil `_player.play()` SEBELUM `setAudioSource()`, membiarkan audio lama tetap berjalan saat audio baru sedang di-buffer.
+- **Solusi**:
+  1. Mengubah `launchMode` menjadi `singleTask` dan menghapus `taskAffinity=""` di `AndroidManifest.xml`, menjamin hanya 1 instance Activity/Engine di sistem Android.
+  2. Menghapus instansiasi `_localPlayer` redundan (lazy fallback).
+  3. Memastikan `_player.pause()` segera dipanggil di awal transisi dan `setAudioSource()` selesai terlebih dahulu sebelum `_player.play()` dipanggil.
+  4. Versi dinaikkan ke `v1.0.5+6` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

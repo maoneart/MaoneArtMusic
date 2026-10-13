@@ -101,7 +101,7 @@ class MiniPlayer extends ConsumerWidget {
                             Row(
                               children: [
                                 if (playerState.isPlaying) ...[
-                                  const SizedBox(
+                                  SizedBox(
                                     width: 14,
                                     height: 10,
                                     child: NeonMiniVisualizerStrip(

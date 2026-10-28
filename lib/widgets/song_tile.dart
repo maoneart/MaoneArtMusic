@@ -45,24 +45,66 @@ class SongTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOffline = ref.watch(libraryProvider).isOffline(song);
 
+    final activeBorder = isPlaying
+        ? Border.all(color: MaoneArtTheme.primaryCyan.withOpacity(0.55), width: 1.2)
+        : Border.all(color: Colors.white.withOpacity(0.12), width: 0.9);
+
+    final activeGradient = isPlaying
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              MaoneArtTheme.primaryCyan.withOpacity(0.18),
+              MaoneArtTheme.primaryPurple.withOpacity(0.08),
+            ],
+          )
+        : LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withOpacity(0.11),
+              Colors.white.withOpacity(0.04),
+            ],
+          );
+
+    final activeShadow = isPlaying
+        ? [
+            BoxShadow(
+              color: MaoneArtTheme.primaryCyan.withOpacity(0.22),
+              blurRadius: 18,
+              spreadRadius: 1,
+              offset: const Offset(0, 3),
+            ),
+          ]
+        : [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ];
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 12.0),
+      padding: const EdgeInsets.symmetric(vertical: 4.5, horizontal: 14.0),
       child: GlassContainer(
-        borderRadius: 14,
-        padding: const EdgeInsets.all(8.0),
+        borderRadius: 16,
+        padding: const EdgeInsets.all(9.0),
+        border: activeBorder,
+        gradient: activeGradient,
+        boxShadow: activeShadow,
         onTap: onTap,
         child: Row(
           children: [
             // Rank Number Badge (Spotify style)
             if (rank != null) ...[
               SizedBox(
-                width: 32,
+                width: 30,
                 child: Center(
                   child: Text(
                     '$rank',
                     style: TextStyle(
-                      fontSize: rank! <= 3 ? 16 : 14,
-                      fontWeight: rank! <= 3 ? FontWeight.w900 : FontWeight.w600,
+                      fontSize: rank! <= 3 ? 15 : 13.5,
+                      fontWeight: rank! <= 3 ? FontWeight.w800 : FontWeight.w600,
                       color: _getRankColor(rank!),
                     ),
                   ),
@@ -71,35 +113,40 @@ class SongTile extends ConsumerWidget {
               const SizedBox(width: 6),
             ],
 
-            // Track Artwork with Playing Indicator Overlay
+            // Track Artwork with Animated Dancing Equalizer Overlay
             Stack(
               children: [
                 AppArtwork(
                   artworkUrl: song.artworkUrl,
                   width: 52,
                   height: 52,
-                  borderRadius: 10,
+                  borderRadius: 12,
                 ),
                 if (isPlaying)
                   Positioned.fill(
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.4),
-                        borderRadius: BorderRadius.circular(10),
+                        color: Colors.black.withOpacity(0.48),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: MaoneArtTheme.primaryCyan.withOpacity(0.4),
+                          width: 0.8,
+                        ),
                       ),
                       child: const Center(
-                        child: Icon(Icons.bar_chart_rounded, color: MaoneArtTheme.spotifyGreenBright, size: 26),
+                        child: _PlayingAnimatedBars(),
                       ),
                     ),
                   ),
               ],
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 13),
 
             // Track Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Row(
                     children: [
@@ -117,9 +164,10 @@ class SongTile extends ConsumerWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            color: isPlaying ? MaoneArtTheme.spotifyGreenBright : Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14.5,
+                            letterSpacing: -0.2,
+                            color: isPlaying ? MaoneArtTheme.primaryCyan : Colors.white,
                           ),
                         ),
                       ),
@@ -143,14 +191,15 @@ class SongTile extends ConsumerWidget {
                         ),
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     '${song.artist} • ${song.album}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.w400,
+                      color: isPlaying ? Colors.white.withOpacity(0.8) : Colors.white.withOpacity(0.6),
                     ),
                   ),
                 ],
@@ -177,18 +226,27 @@ class SongTile extends ConsumerWidget {
                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 padding: const EdgeInsets.all(4),
                 icon: Icon(
-                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                  isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
                   color: isFavorite ? Colors.redAccent : Colors.white54,
                   size: 19,
                 ),
                 onPressed: onFavoriteTap,
               ),
 
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0),
+            Container(
+              margin: const EdgeInsets.only(left: 2, right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(6),
+              ),
               child: Text(
                 _formatDuration(song.durationSeconds),
-                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.5)),
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withOpacity(0.6),
+                ),
               ),
             ),
 
@@ -197,11 +255,77 @@ class SongTile extends ConsumerWidget {
                 visualDensity: VisualDensity.compact,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
                 padding: const EdgeInsets.all(2),
-                icon: const Icon(Icons.more_vert, color: Colors.white70, size: 18),
+                icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 18),
                 onPressed: onMoreTap,
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Lightweight Animated Neon Equalizer Bars for Playing Song Artwork Overlay
+class _PlayingAnimatedBars extends StatefulWidget {
+  const _PlayingAnimatedBars({Key? key}) : super(key: key);
+
+  @override
+  State<_PlayingAnimatedBars> createState() => _PlayingAnimatedBarsState();
+}
+
+class _PlayingAnimatedBarsState extends State<_PlayingAnimatedBars>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final val = _controller.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _bar(9 + val * 11),
+            const SizedBox(width: 3),
+            _bar(19 - val * 9),
+            const SizedBox(width: 3),
+            _bar(7 + val * 13),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _bar(double height) {
+    return Container(
+      width: 3.5,
+      height: height.clamp(4.0, 20.0),
+      decoration: BoxDecoration(
+        color: MaoneArtTheme.primaryCyan,
+        borderRadius: BorderRadius.circular(2),
+        boxShadow: [
+          BoxShadow(
+            color: MaoneArtTheme.primaryCyan.withOpacity(0.8),
+            blurRadius: 4,
+          ),
+        ],
       ),
     );
   }

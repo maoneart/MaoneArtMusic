@@ -88,6 +88,27 @@
   5. Menambahkan proteksi Auto-Skip `next(isAuto: true)` jika sebuah trek YouTube unplayable agar musik tidak pernah macet.
   6. Versi dinaikkan ke `v1.0.7+8` di `pubspec.yaml`.
 
+### ✨ Premium Glassmorphism & Micro-Interaction Redesign (v1.0.8+9 - 28 Oktober 2026)
+- **Tujuan**: Menerapkan standar visual tinggi dari sistem desain AI modern (`redesign-existing-projects` & `landing-page-design`) pada komponen pemutar musik dan daftar lagu.
+- **Pembaruan Visual & Interaktivitas**:
+  1. **`GlassContainer` Upgrade**:
+     - Ditambahkan dukungan gradient ambient light (pantulan cahaya sudut kiri-atas) dan custom shadow layer.
+     - Ditambahkan haptic tactile micro-interaction (`AnimatedScale` 0.98 dengan `Curves.easeOutCubic` 140ms saat ditekan).
+  2. **`SongTile` (Daftar Lagu Universal)**:
+     - Efek kartu aktif saat lagu berputar (`isPlaying`): border cyan menyala (`MaoneArtTheme.primaryCyan`), gradient background lembut, dan ambient glow shadow.
+     - Overlay artwork aktif: animasi equalizer 3-bar dinamis (`_PlayingAnimatedBars`) menggantikan ikon statis.
+     - Tipografi & Spacing: Font weight w600 pada judul, padding simetris 8pt grid, badge durasi kapsul elegan, dan nested radius formula (16 luar, 12 dalam).
+  3. **`MiniPlayer` (Dock Pemutar Melayang)**:
+     - Ditingkatkan menjadi pulau kaca frosted (`BackdropFilter` sigma 18, radius 16, border tipis ber-opacity).
+     - Tombol play/pause berbentuk lingkaran kaca dengan indikator loading halus.
+     - Progress bar mikro bergradasi warna cyan ke ungu.
+  4. **`PlayerScreen` (Layar Pemutar Penuh)**:
+     - Bingkai artwork berbingkai kaca tipis dengan bayangan ganda neon cyan-ungu bervolume tinggi.
+     - Tombol Play/Pause utama (`_AnimatedPlayButton`): animasi tekan haptic (scale 0.92), neon halo glow, dan transisi ikon halus (`AnimatedSwitcher`).
+     - Indikator aktif bercahaya pada tombol Shuffle & Repeat saat dinyalakan.
+     - Panel kontrol landscape diselaraskan dengan standar glassmorphism yang sama.
+  5. Versi aplikasi dinaikkan ke `v1.0.8+9` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

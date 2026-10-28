@@ -1,7 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 
-class GlassContainer extends StatelessWidget {
+class GlassContainer extends StatefulWidget {
   final Widget child;
   final double blur;
   final double opacity;
@@ -9,7 +9,10 @@ class GlassContainer extends StatelessWidget {
   final EdgeInsetsGeometry? padding;
   final EdgeInsetsGeometry? margin;
   final Border? border;
+  final Gradient? gradient;
+  final List<BoxShadow>? boxShadow;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   const GlassContainer({
     Key? key,
@@ -20,43 +23,89 @@ class GlassContainer extends StatelessWidget {
     this.padding,
     this.margin,
     this.border,
+    this.gradient,
+    this.boxShadow,
     this.onTap,
+    this.onLongPress,
   }) : super(key: key);
 
   @override
+  State<GlassContainer> createState() => _GlassContainerState();
+}
+
+class _GlassContainerState extends State<GlassContainer> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    Widget content = Container(
-      margin: margin,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(opacity),
-        borderRadius: BorderRadius.circular(borderRadius),
-        border: border ?? Border.all(color: Colors.white.withOpacity(0.18), width: 1.0),
-        boxShadow: [
+    final effectiveBorder = widget.border ??
+        Border.all(
+          color: Colors.white.withOpacity(0.18),
+          width: 1.0,
+        );
+
+    final effectiveGradient = widget.gradient ??
+        LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(widget.opacity + 0.05),
+            Colors.white.withOpacity(widget.opacity * 0.75),
+          ],
+        );
+
+    final effectiveShadow = widget.boxShadow ??
+        [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 18,
             spreadRadius: 2,
+            offset: const Offset(0, 4),
           ),
-        ],
+        ];
+
+    Widget content = Container(
+      margin: widget.margin,
+      padding: widget.padding,
+      decoration: BoxDecoration(
+        gradient: effectiveGradient,
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        border: effectiveBorder,
+        boxShadow: effectiveShadow,
       ),
-      child: child,
+      child: widget.child,
     );
 
     Widget clip = ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
+      borderRadius: BorderRadius.circular(widget.borderRadius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+        filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
         child: content,
       ),
     );
 
-    if (onTap != null) {
+    if (widget.onTap != null || widget.onLongPress != null) {
       return GestureDetector(
-        onTap: onTap,
-        child: clip,
+        onTapDown: (_) {
+          if (mounted) setState(() => _isPressed = true);
+        },
+        onTapUp: (_) {
+          if (mounted) setState(() => _isPressed = false);
+        },
+        onTapCancel: () {
+          if (mounted) setState(() => _isPressed = false);
+        },
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: AnimatedScale(
+          scale: _isPressed ? 0.98 : 1.0,
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          child: clip,
+        ),
       );
     }
+
     return clip;
   }
 }

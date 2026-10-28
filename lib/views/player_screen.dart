@@ -246,8 +246,27 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
           // Song Title & Artist Info Box with Star/Playlist, Offline Download & Favorite
           GlassContainer(
-            borderRadius: 20,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            borderRadius: 22,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.18),
+              width: 1.0,
+            ),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withOpacity(0.14),
+                Colors.white.withOpacity(0.05),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
+              ),
+            ],
             child: Row(
               children: [
                 Expanded(
@@ -260,8 +279,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 18.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
                           color: Colors.white,
                         ),
                       ),
@@ -272,7 +292,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          color: Colors.white.withOpacity(0.7),
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withOpacity(0.72),
                         ),
                       ),
                     ],
@@ -306,72 +327,66 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
           const SizedBox(height: 12),
 
-          // Audio Controls
+          // Audio Controls with tactile play button and glowing states
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              IconButton(
-                icon: Icon(
-                  Icons.shuffle,
-                  color: playerState.isShuffle ? MaoneArtTheme.primaryCyan : Colors.white70,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: playerState.isShuffle
+                      ? MaoneArtTheme.primaryCyan.withOpacity(0.15)
+                      : Colors.transparent,
                 ),
-                onPressed: () => ref.read(playerProvider).toggleShuffle(),
+                child: IconButton(
+                  icon: Icon(
+                    Icons.shuffle_rounded,
+                    color: playerState.isShuffle ? MaoneArtTheme.primaryCyan : Colors.white70,
+                    size: 24,
+                  ),
+                  tooltip: "Acak",
+                  onPressed: () => ref.read(playerProvider).toggleShuffle(),
+                ),
               ),
               IconButton(
-                icon: const Icon(Icons.skip_previous, size: 36, color: Colors.white),
+                icon: const Icon(Icons.skip_previous_rounded, size: 38, color: Colors.white),
+                tooltip: "Sebelumnya",
                 onPressed: () => ref.read(playerProvider).previous(),
               ),
 
-              // Play/Pause/Loading Button
-              GestureDetector(
+              // Animated Play/Pause Button
+              _AnimatedPlayButton(
+                size: 68,
+                isLoading: playerState.isLoading,
+                isPlaying: playerState.isPlaying,
                 onTap: () => ref.read(playerProvider).togglePlayPause(),
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [MaoneArtTheme.primaryCyan, MaoneArtTheme.primaryPurple],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: MaoneArtTheme.primaryCyan.withOpacity(0.4),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: playerState.isLoading
-                      ? const SizedBox(
-                          width: 26,
-                          height: 26,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                          ),
-                        )
-                      : Icon(
-                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          size: 38,
-                          color: Colors.black,
-                        ),
-                ),
               ),
 
               IconButton(
-                icon: const Icon(Icons.skip_next, size: 36, color: Colors.white),
+                icon: const Icon(Icons.skip_next_rounded, size: 38, color: Colors.white),
+                tooltip: "Berikutnya",
                 onPressed: () => ref.read(playerProvider).next(),
               ),
-              IconButton(
-                icon: Icon(
-                  playerState.repeatMode == MusicRepeatMode.one
-                      ? Icons.repeat_one
-                      : Icons.repeat,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
                   color: playerState.repeatMode != MusicRepeatMode.off
-                      ? MaoneArtTheme.primaryCyan
-                      : Colors.white70,
+                      ? MaoneArtTheme.primaryCyan.withOpacity(0.15)
+                      : Colors.transparent,
                 ),
-                onPressed: () => ref.read(playerProvider).toggleRepeatMode(),
+                child: IconButton(
+                  icon: Icon(
+                    playerState.repeatMode == MusicRepeatMode.one
+                        ? Icons.repeat_one_rounded
+                        : Icons.repeat_rounded,
+                    color: playerState.repeatMode != MusicRepeatMode.off
+                        ? MaoneArtTheme.primaryCyan
+                        : Colors.white70,
+                    size: 24,
+                  ),
+                  tooltip: "Ulangi",
+                  onPressed: () => ref.read(playerProvider).toggleRepeatMode(),
+                ),
               ),
             ],
           ),
@@ -471,69 +486,64 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              IconButton(
-                iconSize: 22,
-                icon: Icon(
-                  Icons.shuffle,
-                  color: playerState.isShuffle ? MaoneArtTheme.primaryCyan : Colors.white70,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: playerState.isShuffle
+                      ? MaoneArtTheme.primaryCyan.withOpacity(0.15)
+                      : Colors.transparent,
                 ),
-                onPressed: () => ref.read(playerProvider).toggleShuffle(),
+                child: IconButton(
+                  iconSize: 22,
+                  icon: Icon(
+                    Icons.shuffle_rounded,
+                    color: playerState.isShuffle ? MaoneArtTheme.primaryCyan : Colors.white70,
+                  ),
+                  tooltip: "Acak",
+                  onPressed: () => ref.read(playerProvider).toggleShuffle(),
+                ),
               ),
               IconButton(
-                iconSize: 32,
-                icon: const Icon(Icons.skip_previous, color: Colors.white),
+                iconSize: 34,
+                icon: const Icon(Icons.skip_previous_rounded, color: Colors.white),
+                tooltip: "Sebelumnya",
                 onPressed: () => ref.read(playerProvider).previous(),
               ),
-              GestureDetector(
+
+              // Animated Play/Pause Button
+              _AnimatedPlayButton(
+                size: 56,
+                isLoading: playerState.isLoading,
+                isPlaying: playerState.isPlaying,
                 onTap: () => ref.read(playerProvider).togglePlayPause(),
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [MaoneArtTheme.primaryCyan, MaoneArtTheme.primaryPurple],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: MaoneArtTheme.primaryCyan.withOpacity(0.4),
-                        blurRadius: 16,
-                        spreadRadius: 2,
-                      ),
-                    ],
-                  ),
-                  child: playerState.isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.8,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                          ),
-                        )
-                      : Icon(
-                          playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          size: 34,
-                          color: Colors.black,
-                        ),
-                ),
               ),
+
               IconButton(
-                iconSize: 32,
-                icon: const Icon(Icons.skip_next, color: Colors.white),
+                iconSize: 34,
+                icon: const Icon(Icons.skip_next_rounded, color: Colors.white),
+                tooltip: "Berikutnya",
                 onPressed: () => ref.read(playerProvider).next(),
               ),
-              IconButton(
-                iconSize: 22,
-                icon: Icon(
-                  playerState.repeatMode == MusicRepeatMode.one
-                      ? Icons.repeat_one
-                      : Icons.repeat,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
                   color: playerState.repeatMode != MusicRepeatMode.off
-                      ? MaoneArtTheme.primaryCyan
-                      : Colors.white70,
+                      ? MaoneArtTheme.primaryCyan.withOpacity(0.15)
+                      : Colors.transparent,
                 ),
-                onPressed: () => ref.read(playerProvider).toggleRepeatMode(),
+                child: IconButton(
+                  iconSize: 22,
+                  icon: Icon(
+                    playerState.repeatMode == MusicRepeatMode.one
+                        ? Icons.repeat_one_rounded
+                        : Icons.repeat_rounded,
+                    color: playerState.repeatMode != MusicRepeatMode.off
+                        ? MaoneArtTheme.primaryCyan
+                        : Colors.white70,
+                  ),
+                  tooltip: "Ulangi",
+                  onPressed: () => ref.read(playerProvider).toggleRepeatMode(),
+                ),
               ),
             ],
           ),
@@ -885,12 +895,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             tag: 'player_artwork',
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                  width: 1.2,
+                ),
                 boxShadow: [
                   BoxShadow(
-                    color: MaoneArtTheme.primaryCyan.withOpacity(0.3),
-                    blurRadius: 30,
-                    spreadRadius: 5,
+                    color: MaoneArtTheme.primaryCyan.withOpacity(0.35),
+                    blurRadius: 36,
+                    spreadRadius: 4,
+                    offset: const Offset(0, 8),
+                  ),
+                  BoxShadow(
+                    color: MaoneArtTheme.primaryPurple.withOpacity(0.25),
+                    blurRadius: 48,
+                    spreadRadius: 2,
                   ),
                 ],
               ),
@@ -898,12 +918,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 artworkUrl: song.artworkUrl,
                 width: artworkWidth,
                 height: artworkWidth,
-                borderRadius: 24,
+                borderRadius: 26,
                 iconSize: 80,
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           // Ambient Neon Visualizer Strip beneath artwork
           SizedBox(
             width: artworkWidth,
@@ -1181,6 +1201,99 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Tactile Animated Play/Pause Button with Smooth Press Feedback & Ambient Neon Glow
+class _AnimatedPlayButton extends StatefulWidget {
+  final double size;
+  final bool isLoading;
+  final bool isPlaying;
+  final VoidCallback onTap;
+
+  const _AnimatedPlayButton({
+    Key? key,
+    this.size = 68.0,
+    required this.isLoading,
+    required this.isPlaying,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  State<_AnimatedPlayButton> createState() => _AnimatedPlayButtonState();
+}
+
+class _AnimatedPlayButtonState extends State<_AnimatedPlayButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconSize = widget.size * 0.58;
+
+    return GestureDetector(
+      onTapDown: (_) {
+        if (mounted) setState(() => _isPressed = true);
+      },
+      onTapUp: (_) {
+        if (mounted) setState(() => _isPressed = false);
+      },
+      onTapCancel: () {
+        if (mounted) setState(() => _isPressed = false);
+      },
+      onTap: widget.onTap,
+      child: AnimatedScale(
+        scale: _isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOutCubic,
+        child: Container(
+          width: widget.size,
+          height: widget.size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [MaoneArtTheme.primaryCyan, MaoneArtTheme.primaryPurple],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: MaoneArtTheme.primaryCyan.withOpacity(0.42),
+                blurRadius: 22,
+                spreadRadius: 3,
+                offset: const Offset(0, 4),
+              ),
+              if (widget.isPlaying)
+                BoxShadow(
+                  color: MaoneArtTheme.primaryPurple.withOpacity(0.35),
+                  blurRadius: 32,
+                  spreadRadius: 2,
+                ),
+            ],
+          ),
+          child: Center(
+            child: widget.isLoading
+                ? SizedBox(
+                    width: widget.size * 0.4,
+                    height: widget.size * 0.4,
+                    child: const CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                    ),
+                  )
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                    child: Icon(
+                      widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      key: ValueKey<bool>(widget.isPlaying),
+                      size: iconSize,
+                      color: Colors.black,
+                    ),
+                  ),
+          ),
+        ),
       ),
     );
   }

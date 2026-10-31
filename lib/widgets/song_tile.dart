@@ -89,6 +89,7 @@ class SongTile extends ConsumerWidget {
       child: GlassContainer(
         borderRadius: 16,
         padding: const EdgeInsets.all(9.0),
+        blur: 0.0,
         border: activeBorder,
         gradient: activeGradient,
         boxShadow: activeShadow,
@@ -288,6 +289,7 @@ class _PlayingAnimatedBarsState extends State<_PlayingAnimatedBars>
 
   @override
   void dispose() {
+    _controller.stop();
     _controller.dispose();
     super.dispose();
   }

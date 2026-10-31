@@ -78,10 +78,12 @@ class _GlassContainerState extends State<GlassContainer> {
 
     Widget clip = ClipRRect(
       borderRadius: BorderRadius.circular(widget.borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
-        child: content,
-      ),
+      child: widget.blur > 0
+          ? BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: widget.blur, sigmaY: widget.blur),
+              child: content,
+            )
+          : content,
     );
 
     if (widget.onTap != null || widget.onLongPress != null) {

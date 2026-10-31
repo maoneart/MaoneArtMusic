@@ -293,18 +293,13 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Low-Latency Streaming Playback with Reliable Failover & Browser Headers
+      // 7. Low-Latency Streaming Playback with Immediate Play Trigger (<500ms)
       bool sourceSet = false;
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(streamUrl),
-            headers: const {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': '*/*',
-              'Connection': 'keep-alive',
-            },
             tag: MediaItem(
               id: _currentSong!.id,
               title: _currentSong!.title,
@@ -315,7 +310,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 12));
+          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 6));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 
@@ -693,11 +688,6 @@ class PlayerStateNotifier extends ChangeNotifier {
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(url),
-            headers: const {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': '*/*',
-              'Connection': 'keep-alive',
-            },
             tag: MediaItem(
               id: baseSong.id,
               title: "${baseSong.title} (Karaoke)",
@@ -785,11 +775,6 @@ class PlayerStateNotifier extends ChangeNotifier {
           try {
             final audioSource = AudioSource.uri(
               Uri.parse(url),
-              headers: const {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': '*/*',
-                'Connection': 'keep-alive',
-              },
               tag: MediaItem(
                 id: baseSong.id,
                 title: baseSong.title,

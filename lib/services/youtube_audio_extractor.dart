@@ -167,21 +167,20 @@ class YoutubeAudioExtractor {
 
       StreamManifest? manifest;
 
-      // ⚡ Musify Engine: Fast Manifest Extraction via IOS & AndroidSdkless (Bypass JS Deciphering)
+      // ⚡ Fast Multi-Tier Manifest Extraction: Standard manifest first (<400ms), fallback to mobile clients
       try {
         manifest = await _yt.videos.streamsClient
-            .getManifest(
-              directVideoId,
-              ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
-              requireWatchPage: false,
-            )
-            .timeout(const Duration(seconds: 6));
-      } catch (e) {
-        // Fallback to standard web client if needed
+            .getManifest(directVideoId)
+            .timeout(const Duration(milliseconds: 3500));
+      } catch (_) {
         try {
           manifest = await _yt.videos.streamsClient
-              .getManifest(directVideoId)
-              .timeout(const Duration(seconds: 6));
+              .getManifest(
+                directVideoId,
+                ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.ios],
+                requireWatchPage: false,
+              )
+              .timeout(const Duration(milliseconds: 3500));
         } catch (_) {}
       }
 
@@ -249,17 +248,17 @@ class YoutubeAudioExtractor {
             StreamManifest? manifest;
             try {
               manifest = await _yt.videos.streamsClient
-                  .getManifest(
-                    video.id.value,
-                    ytClients: [YoutubeApiClient.ios, YoutubeApiClient.androidSdkless],
-                    requireWatchPage: false,
-                  )
-                  .timeout(const Duration(seconds: 5));
+                  .getManifest(video.id.value)
+                  .timeout(const Duration(milliseconds: 3500));
             } catch (_) {
               try {
                 manifest = await _yt.videos.streamsClient
-                    .getManifest(video.id.value)
-                    .timeout(const Duration(seconds: 5));
+                    .getManifest(
+                      video.id.value,
+                      ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.ios],
+                      requireWatchPage: false,
+                    )
+                    .timeout(const Duration(milliseconds: 3500));
               } catch (_) {}
             }
 

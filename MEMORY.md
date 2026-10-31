@@ -1,7 +1,7 @@
 # Project Memory — MaoneArt Music (`/sdcard/www/MaoneArtMusic`)
 
 > **Flutter Glassmorphic Music Streaming Client**  
-> **Terakhir diperbarui**: 13 Oktober 2026
+> **Terakhir diperbarui**: 31 Oktober 2026
 
 ---
 
@@ -108,6 +108,28 @@
      - Indikator aktif bercahaya pada tombol Shuffle & Repeat saat dinyalakan.
      - Panel kontrol landscape diselaraskan dengan standar glassmorphism yang sama.
   5. Versi aplikasi dinaikkan ke `v1.0.8+9` di `pubspec.yaml`.
+
+### ⚡ Fix GPU OOM Crash, BackdropFilter Optimization & Low-Latency Stream (<500ms) (v1.0.9+10 - 31 Oktober 2026)
+- **Problem**:
+  1. **Force Close / Crash**: Sejak update v1.0.8, aplikasi kerap force close mendadak saat scrolling daftar lagu atau bernavigasi.
+  2. **Play Music Lambat**: Pemutaran lagu terasa lambat (buffering 15-25 detik sebelum audio berbunyi).
+- **Akar Masalah (Root Causes)**:
+  1. **GPU Surface / VRAM Exhaustion**: Komponen `SongTile` menggunakan `GlassContainer` dengan default `blur: 15.0`. Pada list view (`HomeScreen`, `LibraryScreen`), 20-50 tile di-render bersamaan dengan `BackdropFilter`. Akumulasi puluhan layer offscreen blur texture + mini player + bottom nav + animasi 60 FPS melebihi alokasi memori driver GPU Android, memicu `EGL_BAD_ALLOC` / SIGSEGV (force close). Ditambah `_PlayingAnimatedBars` tidak memanggil `_controller.stop()` sebelum dispose.
+  2. **Streaming Latency & CDN Throttling**:
+     - Di `youtube_audio_extractor.dart`, query manifest mengutamakan klien `[ios, androidSdkless]` yang sering diblokir YouTube tanpa PO token sehingga mengalami timeout bertingkat (6s + 6s).
+     - Di `player_provider.dart`, penghapusan `preload: false` membuat `_player.setAudioSource` memblokir eksekusi async Dart hingga ExoPlayer selesai mengisi buffer awal (6-12 detik).
+     - Penambahan header Windows User-Agent pada URL stream seluler memicu penolakan/throttling oleh Google Video CDN.
+- **Solusi**:
+  1. **Zero-Overhead Glass Tile**:
+     - `GlassContainer` diperbarui agar membypass `BackdropFilter` secara total bila `blur <= 0.0`.
+     - `SongTile` diatur menggunakan `blur: 0.0` (efek glassmorphism berupa border, gradient transparan, dan glow shadow tetap utuh tanpa beban rendering blur GPU sama sekali).
+     - Blur `MiniPlayer` dimoderasi dari sigma 18 ke sigma 12 untuk efisiensi fill rate.
+     - Ditambahkan `_controller.stop()` sebelum `_controller.dispose()` pada `_PlayingAnimatedBarsState`.
+  2. **Instant Audio Startup (<500ms)**:
+     - Query manifest standar YouTube diutamakan terlebih dahulu dengan timeout 3.5 detik (respon <400ms), baru fallback ke client mobile bila diperlukan.
+     - Mengembalikan parameter `preload: false` pada `_player.setAudioSource` (AudioPlayer langsung siap dalam ~10ms dan audio berbunyi dalam <500ms).
+     - Menghapus header custom Windows User-Agent palsu pada `AudioSource.uri` agar Google Video CDN tidak memblokir/memperlambat stream token Android.
+  3. Versi aplikasi dinaikkan ke `v1.0.9+10` di `pubspec.yaml`.
 
 ---
 

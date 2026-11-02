@@ -143,6 +143,47 @@ class YoutubeAudioExtractor {
     }
   }
 
+  /// Multi-tier manifest fetcher: Prioritize fast mobile/VR clients with 0ms watch-page overhead, fallback gracefully
+  static Future<StreamManifest?> _fetchManifestSafely(String videoId) async {
+    // ⚡ Tier 1: High-Speed Mobile & VR Clients (Bypass JS Deciphering & PO Token, 0ms Watch Page overhead)
+    try {
+      return await _yt.videos.streamsClient
+          .getManifest(
+            videoId,
+            ytClients: [
+              YoutubeApiClient.ios,
+              YoutubeApiClient.androidVr,
+              YoutubeApiClient.tv,
+            ],
+            requireWatchPage: false,
+          )
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
+
+    // ⚡ Tier 2: Secondary Clients (Safari HLS & Android)
+    try {
+      return await _yt.videos.streamsClient
+          .getManifest(
+            videoId,
+            ytClients: [
+              YoutubeApiClient.safari,
+              YoutubeApiClient.android,
+            ],
+            requireWatchPage: false,
+          )
+          .timeout(const Duration(seconds: 4));
+    } catch (_) {}
+
+    // ⚡ Tier 3: Standard Manifest fallback
+    try {
+      return await _yt.videos.streamsClient
+          .getManifest(videoId)
+          .timeout(const Duration(seconds: 4));
+    } catch (_) {}
+
+    return null;
+  }
+
   static Future<List<String>> _extractCandidateUrlsInternal(Song song, {required String quality, required String cacheKey}) async {
     final List<String> candidateUrls = [];
     final String? directVideoId = song.youtubeId ??
@@ -165,38 +206,23 @@ class YoutubeAudioExtractor {
         } catch (_) {}
       }
 
-      StreamManifest? manifest;
+      final manifest = await _fetchManifestSafely(directVideoId);
 
-      // ⚡ Fast Multi-Tier Manifest Extraction: Standard manifest first (<400ms), fallback to mobile clients
-      try {
-        manifest = await _yt.videos.streamsClient
-            .getManifest(directVideoId)
-            .timeout(const Duration(milliseconds: 3500));
-      } catch (_) {
-        try {
-          manifest = await _yt.videos.streamsClient
-              .getManifest(
-                directVideoId,
-                ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.ios],
-                requireWatchPage: false,
-              )
-              .timeout(const Duration(milliseconds: 3500));
-        } catch (_) {}
-      }
-
-      if (manifest != null && manifest.audioOnly.isNotEmpty) {
+      if (manifest != null && (manifest.audioOnly.isNotEmpty || manifest.muxed.isNotEmpty)) {
         // Primary selected stream (AAC / Tag 140)
-        try {
-          final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
-          candidateUrls.add(primary.url.toString());
-        } catch (_) {}
+        if (manifest.audioOnly.isNotEmpty) {
+          try {
+            final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
+            candidateUrls.add(primary.url.toString());
+          } catch (_) {}
 
-        // Add remaining audio streams as failovers
-        final sortedAudio = manifest.audioOnly.sortByBitrate();
-        for (final a in sortedAudio) {
-          final urlStr = a.url.toString();
-          if (!candidateUrls.contains(urlStr)) {
-            candidateUrls.add(urlStr);
+          // Add remaining audio streams as failovers
+          final sortedAudio = manifest.audioOnly.sortByBitrate();
+          for (final a in sortedAudio) {
+            final urlStr = a.url.toString();
+            if (!candidateUrls.contains(urlStr)) {
+              candidateUrls.add(urlStr);
+            }
           }
         }
 
@@ -245,33 +271,20 @@ class YoutubeAudioExtractor {
 
         for (final video in candidates) {
           try {
-            StreamManifest? manifest;
-            try {
-              manifest = await _yt.videos.streamsClient
-                  .getManifest(video.id.value)
-                  .timeout(const Duration(milliseconds: 3500));
-            } catch (_) {
-              try {
-                manifest = await _yt.videos.streamsClient
-                    .getManifest(
-                      video.id.value,
-                      ytClients: [YoutubeApiClient.androidSdkless, YoutubeApiClient.ios],
-                      requireWatchPage: false,
-                    )
-                    .timeout(const Duration(milliseconds: 3500));
-              } catch (_) {}
-            }
+            final manifest = await _fetchManifestSafely(video.id.value);
 
-            if (manifest != null && manifest.audioOnly.isNotEmpty) {
-              final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
-              candidateUrls.add(primary.url.toString());
-            } else if (manifest != null && manifest.muxed.isNotEmpty) {
-              candidateUrls.add(manifest.muxed.withHighestBitrate().url.toString());
-            }
+            if (manifest != null && (manifest.audioOnly.isNotEmpty || manifest.muxed.isNotEmpty)) {
+              if (manifest.audioOnly.isNotEmpty) {
+                final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
+                candidateUrls.add(primary.url.toString());
+              } else if (manifest.muxed.isNotEmpty) {
+                candidateUrls.add(manifest.muxed.withHighestBitrate().url.toString());
+              }
 
-            if (candidateUrls.isNotEmpty) {
-              _saveToCaches(cacheKey, candidateUrls);
-              return candidateUrls;
+              if (candidateUrls.isNotEmpty) {
+                _saveToCaches(cacheKey, candidateUrls);
+                return candidateUrls;
+              }
             }
           } catch (_) {
             continue;

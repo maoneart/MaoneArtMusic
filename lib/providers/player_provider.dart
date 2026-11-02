@@ -310,7 +310,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 6));
+          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 10));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 

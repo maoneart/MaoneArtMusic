@@ -1,7 +1,7 @@
 # Project Memory — MaoneArt Music (`/sdcard/www/MaoneArtMusic`)
 
 > **Flutter Glassmorphic Music Streaming Client**  
-> **Terakhir diperbarui**: 31 Oktober 2026
+> **Terakhir diperbarui**: 2 November 2026
 
 ---
 
@@ -130,6 +130,33 @@
      - Mengembalikan parameter `preload: false` pada `_player.setAudioSource` (AudioPlayer langsung siap dalam ~10ms dan audio berbunyi dalam <500ms).
      - Menghapus header custom Windows User-Agent palsu pada `AudioSource.uri` agar Google Video CDN tidak memblokir/memperlambat stream token Android.
   3. Versi aplikasi dinaikkan ke `v1.0.9+10` di `pubspec.yaml`.
+
+### 🔍 Fix Search Playback Failures, Full Queue Auto-Failover & Ultra-Resilient Multi-Tier Extractor (v1.0.10+11 - 2 November 2026)
+- **Problem**: Pengguna melaporkan bahwa saat mencari lagu di halaman pencarian (`SearchScreen`), pemutaran lagu masih sering gagal/tidak bisa berputar (*stuck silent/error*).
+- **Akar Masalah (Root Causes)**:
+  1. **Truncated Search Queue (`newQueue: [song]`)**:
+     - Di `search_screen.dart`, event tap lagu dan tombol Putar Acak hanya mengoper antrean berisi 1 lagu tunggal (`newQueue: [song], index: 0`), bukan `musicState.searchResults`.
+     - Ketika sebuah video hasil pencarian mengalami kendala YouTube (geoblock/copyright/cipher), logika proteksi auto-failover (`if (_queue.length > 1) next(isAuto: true)`) tidak aktif karena panjang antrean hanya 1, menyebabkan pemutar langsung mati dan menampilkan pesan error tanpa mencoba hasil lagu lainnya.
+  2. **Client Manifest Blockade & PO Token Timeout**:
+     - Query manifest web standar (`getManifest(videoId)`) dengan `requireWatchPage: true` memicu sign-in wall YouTube atau cipher decryption failure pada video Vevo/resmi serta memakan waktu >3.5 detik (memicu timeout serial bertingkat hingga outer 15s timeout meledak).
+  3. **Aggressive Typing Pre-fetch Flood**:
+     - Di `music_provider.dart`, setiap kali pengguna mengetik di search bar (debounce 250ms), sistem langsung memanggil `preFetchBatch(searchResults, limit: 3)`. Mengetik 3-4 kata memicu belasan query manifest paralel yang membanjiri pool koneksi HTTP dan memicu rate-limiting / blocking sementara dari YouTube tepat sebelum pengguna mengklik lagu pilihannya.
+  4. **Tight AudioSource Timeout**:
+     - `setAudioSource` dibatasi hanya 6 detik, terlalu sempit untuk jaringan seluler (4G/5G) saat resolusi DNS Google Video CDN padat.
+- **Solusi**:
+  1. **Full Search Queue Restoration**:
+     - Di `search_screen.dart`, kembalikan `newQueue: musicState.searchResults` dan `index: index` untuk tap tile lagu, serta `newQueue: List.from(musicState.searchResults)..shuffle()` untuk tombol Putar Acak.
+     - Jika sebuah hasil lagu bermasalah, player otomatis melompat (*auto-skip*) ke lagu berikutnya secara mulus, serta tombol Next/Previous berfungsi penuh menjelajahi hasil pencarian.
+  2. **Multi-Tier Zero-Overhead Stream Extractor (`_fetchManifestSafely`)**:
+     - **Tier 1 (Instant <400ms)**: Menggunakan klien seluler & VR resmi `[YoutubeApiClient.ios, YoutubeApiClient.androidVr, YoutubeApiClient.tv]` dengan `requireWatchPage: false` (tanpa download HTML watch page, tanpa cipher deciphering, bypass bot-wall).
+     - **Tier 2 (Fallback)**: Klien `[YoutubeApiClient.safari, YoutubeApiClient.android]` jika Tier 1 mengalami anomali.
+     - **Tier 3**: Standard manifest fallback.
+     - Fallback B (Search Fallback) diselaraskan menggunakan engine multi-tier yang sama.
+  3. **Debounce Grace Period pada Search Prefetch**:
+     - Di `music_provider.dart`, gantikan flood batch prefetch dengan grace period 600ms yang hanya mem-prefetch trek teratas jika user sudah berhenti mengetik dan request ID masih valid.
+  4. **Extended ExoPlayer Source Timeout**:
+     - Naikkan batas waktu `setAudioSource` dari 6 detik ke 10 detik agar koneksi seluler tidak terputus prematur.
+  5. Versi aplikasi dinaikkan ke `v1.0.10+11` di `pubspec.yaml`.
 
 ---
 

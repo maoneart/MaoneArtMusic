@@ -147,7 +147,13 @@ class MusicStateNotifier extends ChangeNotifier {
         }
 
         if (_searchResults.isNotEmpty) {
-          YoutubeAudioExtractor.preFetchBatch(_searchResults, limit: 3);
+          // Grace period: Hanya prefetch saat user selesai mengetik agar tidak membebani socket/IP
+          final currentTopSong = _searchResults.first;
+          Future.delayed(const Duration(milliseconds: 600), () {
+            if (_searchRequestId == reqId && _searchResults.isNotEmpty) {
+              YoutubeAudioExtractor.preFetchStreamUrl(currentTopSong, quality: 'high');
+            }
+          });
         }
       }
     } catch (e) {

@@ -10,10 +10,14 @@
    - `just_audio` + `audio_service` untuk background playback & Android lockscreen media notification.
    - Hardware audio offload aktif langsung tanpa AudioPipeline (100% zero buffering streaming & ultra-responsif).
    - Platform channel native Android (`com.maoneart.music/equalizer`) di `MainActivity.kt` untuk integrasi hardware equalizer sistem (Dolby Atmos, Mi Sound, Wavelet).
-2. **Streaming & Extractor**:
-   - Musify Turbo Engine (`YoutubeApiClient.ios` & `androidSdkless` bypass JS deciphering).
-   - Multi-tier stream fallback: Direct AAC/M4A 140 -> Best Audio -> Muxed video stream.
+2. **Streaming & Extractor (Skill `maoneart-music-engine` — TERKUNCI)**:
+   - Vendor lokal `./packages/youtube_explode_dart` (resmi Musify).
+   - Klien tokenless `YoutubeApiClient.visionOs` (prioritas 1) dan `android` (prioritas 2). Dilarang keras memakai `android_vr`.
+   - Dynamic token-matched headers via `YoutubeAudioExtractor.getStreamHeaders(videoId)` (anti-403).
+   - Dolby exclusion codec scoring (AAC/M4A 140 prioritas tertinggi).
+   - Verified handshake playback (`preload: true` default), immediate socket teardown `_player.stop()`, dan rapid-skip debounce 220ms.
    - Dual-layer cache: RAM Cache (0ms) + Disk Cache SharedPreferences (<5ms).
+   - **Logika pemutar terisolasi & terkunci penuh; hanya kustomisasi UI yang diizinkan.**
 3. **Lirik & Karaoke**:
    - LRCLIB API cascade fallback untuk synchronized lyrics (.lrc).
    - Mode Karaoke: Otomatis mendeteksi instrumen minus-one di YouTube.

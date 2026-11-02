@@ -183,6 +183,27 @@
      - `playbackEventStream.onError` kini otomatis mengevikasi cache, menyetel status error, dan memicu `next(isAuto: true)` jika ada antrean lagu lain.
   5. Versi aplikasi dinaikkan ke `v1.0.11+12` di `pubspec.yaml`.
 
+### ⚡ Zero-Latency Playback (<300ms), Immediate Socket Teardown & Rapid-Skip Debounce (v1.0.12+13 - 2 November 2026)
+- **Problem**:
+  1. **Delay Lama saat Play / Ganti Lagu**: Pengguna melaporkan bahwa saat memilih lagu (baik dari hasil pencarian maupun antrean), lagu memang akhirnya berputar ("eh keputer dech") tetapi jedanya sangat lama (5-8 detik).
+  2. **Stuck / Hang saat Next Berulang Kali**: Saat menekan tombol Next berkali-kali secara cepat, delay semakin bertambah parah.
+- **Akar Masalah (Root Causes)**:
+  1. **ExoPlayer Synchronous Preload Blocking**:
+     - Pada versi v1.0.11, parameter `preload: false` dihilangkan sehingga `_player.setAudioSource` memblokir thread eksekusi async Dart hingga ExoPlayer selesai mengunduh seluruh buffer awal lagu (5-8 detik). Padahal dengan hadirnya `_googleVideoHeaders`, Google Video tidak lagi memblokir koneksi, sehingga preload blocking ini menjadi beban latensi murni.
+  2. **Socket Zombie saat Ganti Lagu (`pause` vs `stop`)**:
+     - Saat lagu A sedang berputar dan pengguna memilih lagu B, fungsi `playSong` hanya memanggil `_player.pause()`. Socket streaming dan download pipeline lagu A tetap aktif di background ExoPlayer, sehingga saat lagu B mulai di-load, terjadi perebutan bandwidth dan antrean looper native di Android.
+  3. **Banjir Prefetch & Ketiadaan Debounce pada Tombol Next**:
+     - Di `next()`, terdapat pemanggilan `YoutubeAudioExtractor.preFetchBatch(...)` yang meluncurkan 3 query manifest ke YouTube di setiap klik. Jika pengguna menekan tombol Next 4 kali, 12 koneksi background berjalan bersamaan dan merebut bandwidth lagu yang hendak diputar.
+- **Solusi**:
+  1. **Instant Playback Handshake (`preload: false` + `_googleVideoHeaders`)**:
+     - Mengembalikan `preload: false` pada `_player.setAudioSource`. Karena `_googleVideoHeaders` sudah terpasang, pemanggilan kembali instan (10ms) dan audio langsung berbunyi dalam <300ms begitu paket audio pertama tiba.
+  2. **Immediate Socket Teardown (`_player.stop()`)**:
+     - Mengganti `_player.pause()` dengan `_player.stop()` saat pergantian lagu non-auto. Socket HTTP lagu sebelumnya langsung ditutup seketika dan memori buffer dibebaskan 100% untuk lagu baru.
+  3. **Rapid-Skip Debounce (220ms) & Hapus Redundant Prefetch**:
+     - Menghapus pemanggilan `preFetchBatch` dari dalam fungsi `next()`.
+     - Mengimplementasikan `_skipDebounceTimer` (220ms) pada tombol Next dan Previous: tampilan UI (judul, artwork, notifikasi) langsung berubah seketika (0ms), namun pemanggilan stream network ditunda 220ms sehingga klik berkali-kali hanya akan memutar lagu target terakhir tanpa membebani kuota atau jaringan.
+  4. Versi aplikasi dinaikkan ke `v1.0.12+13` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

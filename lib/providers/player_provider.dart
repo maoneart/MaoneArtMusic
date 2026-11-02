@@ -43,6 +43,7 @@ class PlayerStateNotifier extends ChangeNotifier {
   bool _isExtendingQueue = false;
   Completer<void>? _extendingQueueCompleter;
   String? _lastPreloadedSongId;
+  Timer? _skipDebounceTimer;
 
   // 🎤 Smart Hybrid Karaoke State
   bool _isKaraokeMode = false;
@@ -206,9 +207,9 @@ class PlayerStateNotifier extends ChangeNotifier {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 🛑 0. Immediate Pause of prior playback so old audio NEVER overlaps
+    // 🛑 0. Immediate Stop of prior playback so old audio socket & buffer close INSTANTLY
     if (!isAutoTransition) {
-      _player.pause();
+      _player.stop();
     }
 
     // 1. Queue Configuration
@@ -328,7 +329,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 8));
+          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 8));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 
@@ -638,12 +639,22 @@ class PlayerStateNotifier extends ChangeNotifier {
       }
     }
 
-    // Segera picu prefetch batch lagu setelahnya ke RAM
-    if (_currentIndex + 1 < _queue.length) {
-      YoutubeAudioExtractor.preFetchBatch(_queue.sublist(_currentIndex + 1), quality: _audioQuality, limit: 3);
-    }
+    _currentSong = _queue[_currentIndex];
+    _status = PlayerLoadingStatus.loading;
+    _position = Duration.zero;
+    _duration = Duration(seconds: _currentSong!.durationSeconds);
+    notifyListeners();
 
-    await playSong(_queue[_currentIndex], isAutoTransition: isAuto);
+    if (isAuto) {
+      await playSong(_queue[_currentIndex], isAutoTransition: true);
+    } else {
+      // ⚡ Rapid-Skip Debounce: Respon UI 0ms, namun tunda pemanggilan network 220ms
+      // agar skip berkali-kali tidak membebani koneksi seluler
+      _skipDebounceTimer?.cancel();
+      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        playSong(_queue[_currentIndex]);
+      });
+    }
   }
 
   Future<void> previous() async {
@@ -653,7 +664,17 @@ class PlayerStateNotifier extends ChangeNotifier {
     } else {
       _currentIndex = (_currentIndex - 1 + _queue.length) % _queue.length;
     }
-    await playSong(_queue[_currentIndex]);
+
+    _currentSong = _queue[_currentIndex];
+    _status = PlayerLoadingStatus.loading;
+    _position = Duration.zero;
+    _duration = Duration(seconds: _currentSong!.durationSeconds);
+    notifyListeners();
+
+    _skipDebounceTimer?.cancel();
+    _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      playSong(_queue[_currentIndex]);
+    });
   }
 
   /// 🎤 Smart Hybrid Karaoke Mode: Beralih mulus antara Vokal Asli & Instrumen Minus-One tanpa mengulang posisi lagu
@@ -896,6 +917,7 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   @override
   void dispose() {
+    _skipDebounceTimer?.cancel();
     _fallbackPlayer?.dispose();
     super.dispose();
   }

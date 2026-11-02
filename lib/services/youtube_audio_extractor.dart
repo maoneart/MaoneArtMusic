@@ -9,7 +9,7 @@ class _CachedStream {
   final DateTime timestamp;
   _CachedStream(this.urls, this.timestamp);
 
-  // YouTube audio stream tokens are short-lived (expire in 90-120 mins)
+  // YouTube audio stream tokens are valid for up to 90-120 mins
   bool get isExpired => DateTime.now().difference(timestamp).inMinutes >= 90;
 }
 
@@ -18,21 +18,45 @@ class YoutubeAudioExtractor {
   static final Map<String, _CachedStream> _streamCache = {};
   static final Map<String, Future<List<String>>> _inFlightRequests = {};
 
+  // Exact Musify fallback clients order (visionOs is currently the only tokenless client)
+  static const fallbackClients = [YoutubeApiClient.visionOs, YoutubeApiClient.android];
+
+  // Map of videoId -> client that served its stream URLs
+  static final Map<String, YoutubeApiClient> _songClients = {};
+
   static void clearCache() {
     _streamCache.clear();
     _inFlightRequests.clear();
+    _songClients.clear();
   }
 
   /// Evict stale or broken stream URLs for a specific song ID immediately
   static void evict(String songId) {
-    _streamCache.removeWhere((k, _) => k.contains(songId));
-    _inFlightRequests.removeWhere((k, _) => k.contains(songId));
+    final cleanId = songId.startsWith('yt_') ? songId.substring(3) : songId;
+    _songClients.remove(songId);
+    _songClients.remove(cleanId);
+    _streamCache.removeWhere((k, _) => k.contains(songId) || k.contains(cleanId));
+    _inFlightRequests.removeWhere((k, _) => k.contains(songId) || k.contains(cleanId));
     SharedPreferences.getInstance().then((prefs) {
-      final keys = prefs.getKeys().where((k) => k.contains(songId));
+      final keys = prefs.getKeys().where((k) => k.contains(songId) || k.contains(cleanId));
       for (final k in keys) {
         prefs.remove(k);
       }
     }).catchError((_) {});
+  }
+
+  /// Returns exact headers required by Google Video CDN for the client that minted the stream URL.
+  /// Mismatched User-Agent will cause Google CDN to return HTTP 403 Forbidden!
+  static Map<String, String> getStreamHeaders(String? songId) {
+    final cleanId = (songId != null && songId.startsWith('yt_')) ? songId.substring(3) : songId;
+    final client = _songClients[songId] ?? _songClients[cleanId] ?? fallbackClients.first;
+    final userAgent = client.payload['context']?['client']?['userAgent'];
+    return {
+      if (userAgent is String) 'User-Agent': userAgent,
+      'Accept': '*/*',
+      'Connection': 'keep-alive',
+      for (final entry in client.headers.entries) entry.key: '${entry.value}',
+    };
   }
 
   /// Pre-warm YouTube disk cache into RAM at app launch
@@ -62,27 +86,47 @@ class YoutubeAudioExtractor {
     });
   }
 
-  /// Selects audio stream based on quality preferences (Prioritizing AAC/M4A 140 for 0ms startup)
+  /// Musify's exact audio compatibility scoring:
+  /// Filter out Dolby codecs (ec-3, ac-3, eac3, dolby) which cause ExoPlayer hangs.
+  /// Score 3 = AAC / M4A (starts 0ms on Android ExoPlayer without transcoding).
+  /// Score 2 = Opus / Vorbis.
+  /// Score 0 = Incompatible Dolby codec.
+  static int _audioCompatibilityScore(AudioStreamInfo stream) {
+    final codec = stream.audioCodec.toLowerCase();
+    final container = stream.container.name.toLowerCase();
+
+    if (codec.contains('ec-3') ||
+        codec.contains('ac-3') ||
+        codec.contains('eac3') ||
+        codec.contains('dolby')) {
+      return 0;
+    }
+
+    if ((codec.contains('mp4a') || codec.contains('aac')) &&
+        (container == 'mp4' || container == 'm4a')) {
+      return 3;
+    }
+
+    if (codec.contains('opus') || codec.contains('vorbis')) {
+      return 2;
+    }
+
+    return 1;
+  }
+
+  /// Selects audio stream based on quality preferences using Musify's ranking algorithm
   static AudioStreamInfo _selectAudioQuality(List<AudioStreamInfo> sources, String quality) {
     if (sources.isEmpty) throw Exception("No audio sources found");
-    final sorted = sources.sortByBitrate();
+    final compatible = sources.where((s) => _audioCompatibilityScore(s) >= 2).toList();
+    final pool = (compatible.isNotEmpty ? compatible : List<AudioStreamInfo>.from(sources))
+      ..sort((a, b) => b.bitrate.compareTo(a.bitrate));
 
     if (quality == 'low') {
-      return sorted.firstWhere(
-        (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
-        orElse: () => sorted.first,
-      );
+      return pool.last;
     } else if (quality == 'medium') {
-      return sorted.firstWhere(
-        (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
-        orElse: () => sorted[sorted.length ~/ 2],
-      );
+      return pool[(pool.length - 1) ~/ 2];
     } else {
-      // High / default: Prefer AAC/M4A (tag 140) which starts instantly on Android ExoPlayer
-      return sorted.firstWhere(
-        (s) => s.tag == 140 || s.container.name.toLowerCase() == 'm4a' || s.audioCodec.toLowerCase().contains('mp4a'),
-        orElse: () => sorted.last,
-      );
+      return pool.first;
     }
   }
 
@@ -155,42 +199,47 @@ class YoutubeAudioExtractor {
     }
   }
 
-  /// Multi-tier manifest fetcher: Prioritize fast mobile/VR clients with 0ms watch-page overhead, fallback gracefully
+  /// Multi-client manifest fetcher with exact Musify client fallback chain
   static Future<StreamManifest?> _fetchManifestSafely(String videoId) async {
-    // ⚡ Tier 1: High-Speed Mobile & VR Clients (Bypass JS Deciphering & PO Token, 0ms Watch Page overhead)
-    try {
-      return await _yt.videos.streamsClient
-          .getManifest(
-            videoId,
-            ytClients: [
-              YoutubeApiClient.ios,
-              YoutubeApiClient.androidVr,
-              YoutubeApiClient.tv,
-            ],
-            requireWatchPage: false,
-          )
-          .timeout(const Duration(seconds: 5));
-    } catch (_) {}
+    for (final client in fallbackClients) {
+      try {
+        final manifest = await _yt.videos.streamsClient
+            .getManifest(videoId, ytClients: [client], requireWatchPage: false)
+            .timeout(const Duration(seconds: 5));
+        if (manifest.audioOnly.isNotEmpty) {
+          _songClients[videoId] = client;
+          return manifest;
+        }
+      } catch (_) {}
+    }
 
-    // ⚡ Tier 2: Secondary Clients (Safari HLS & Android)
+    // Secondary fallback: TV and Safari clients
     try {
-      return await _yt.videos.streamsClient
+      final manifest = await _yt.videos.streamsClient
           .getManifest(
             videoId,
             ytClients: [
+              YoutubeApiClient.tv,
               YoutubeApiClient.safari,
-              YoutubeApiClient.android,
             ],
             requireWatchPage: false,
           )
           .timeout(const Duration(seconds: 4));
+      if (manifest.audioOnly.isNotEmpty) {
+        _songClients[videoId] = YoutubeApiClient.tv;
+        return manifest;
+      }
     } catch (_) {}
 
-    // ⚡ Tier 3: Standard Manifest fallback
+    // Final fallback: Standard getManifest
     try {
-      return await _yt.videos.streamsClient
+      final manifest = await _yt.videos.streamsClient
           .getManifest(videoId)
           .timeout(const Duration(seconds: 4));
+      if (manifest.audioOnly.isNotEmpty) {
+        _songClients[videoId] = fallbackClients.first;
+        return manifest;
+      }
     } catch (_) {}
 
     return null;
@@ -221,26 +270,27 @@ class YoutubeAudioExtractor {
       final manifest = await _fetchManifestSafely(directVideoId);
 
       if (manifest != null && (manifest.audioOnly.isNotEmpty || manifest.muxed.isNotEmpty)) {
-        // Primary selected stream (AAC / Tag 140)
         if (manifest.audioOnly.isNotEmpty) {
           try {
             final primary = _selectAudioQuality(manifest.audioOnly.toList(), quality);
             candidateUrls.add(primary.url.toString());
           } catch (_) {}
 
-          // Add remaining audio streams as failovers
-          final sortedAudio = manifest.audioOnly.sortByBitrate();
+          // Add remaining audio streams as failovers (sorted by bitrate)
+          final sortedAudio = manifest.audioOnly.sortByBitrate().reversed;
           for (final a in sortedAudio) {
-            final urlStr = a.url.toString();
-            if (!candidateUrls.contains(urlStr)) {
-              candidateUrls.add(urlStr);
+            if (_audioCompatibilityScore(a) > 0) {
+              final urlStr = a.url.toString();
+              if (!candidateUrls.contains(urlStr)) {
+                candidateUrls.add(urlStr);
+              }
             }
           }
         }
 
         // Add muxed video stream as extra fallback
         if (manifest.muxed.isNotEmpty) {
-          final muxedSorted = manifest.muxed.sortByBitrate();
+          final muxedSorted = manifest.muxed.sortByBitrate().reversed;
           for (final m in muxedSorted) {
             final urlStr = m.url.toString();
             if (!candidateUrls.contains(urlStr)) {

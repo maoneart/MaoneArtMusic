@@ -184,6 +184,7 @@ class AudioCacheService {
       final tempFile = File('${dir.path}/$cleanId.tmp');
 
       bool downloadSuccess = false;
+      final streamHeaders = YoutubeAudioExtractor.getStreamHeaders(song.youtubeId ?? song.id);
       for (final streamUrl in urls) {
         try {
           if (await tempFile.exists()) await tempFile.delete();
@@ -191,6 +192,7 @@ class AudioCacheService {
           await _dio.download(
             streamUrl,
             tempFile.path,
+            options: Options(headers: streamHeaders),
             onReceiveProgress: (received, total) {
               if (total > 0 && onProgress != null) {
                 onProgress(received / total);

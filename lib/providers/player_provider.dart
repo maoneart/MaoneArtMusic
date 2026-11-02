@@ -54,12 +54,6 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   // 🎛️ Audio Effects & System Equalizer State
   static const MethodChannel _equalizerChannel = MethodChannel('com.maoneart.music/equalizer');
-  static const Map<String, String> _googleVideoHeaders = {
-    'User-Agent':
-        'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-    'Accept': '*/*',
-    'Connection': 'keep-alive',
-  };
   double _playbackSpeed = 1.0;
   double _volume = 1.0;
 
@@ -311,14 +305,23 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Low-Latency Streaming Playback with Reliable Verified AudioSource
+      // 7. Low-Latency Streaming Playback with Verified AudioSource & Failover
       bool sourceSet = false;
+      final videoId = _currentSong!.youtubeId ??
+          (_currentSong!.id.startsWith('yt_')
+              ? _currentSong!.id.substring(3)
+              : _currentSong!.id);
+      final streamHeaders = YoutubeAudioExtractor.getStreamHeaders(videoId);
+
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
         try {
+          final uri = Uri.parse(streamUrl);
+          final needsHeaders = !_currentSong!.isLive && uri.host.endsWith('googlevideo.com');
+
           final audioSource = AudioSource.uri(
-            Uri.parse(streamUrl),
-            headers: _googleVideoHeaders,
+            uri,
+            headers: needsHeaders ? streamHeaders : null,
             tag: MediaItem(
               id: _currentSong!.id,
               title: _currentSong!.title,
@@ -329,7 +332,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 8));
+          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 8));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 
@@ -726,11 +729,14 @@ class PlayerStateNotifier extends ChangeNotifier {
       final wasPlaying = _player.playing;
 
       bool sourceSet = false;
+      final kHeaders = YoutubeAudioExtractor.getStreamHeaders(baseSong.youtubeId ?? baseSong.id);
       for (final url in streamUrls) {
         try {
+          final uri = Uri.parse(url);
+          final needsH = !baseSong.isLive && uri.host.endsWith('googlevideo.com');
           final audioSource = AudioSource.uri(
-            Uri.parse(url),
-            headers: _googleVideoHeaders,
+            uri,
+            headers: needsH ? kHeaders : null,
             tag: MediaItem(
               id: baseSong.id,
               title: "${baseSong.title} (Karaoke)",
@@ -814,11 +820,14 @@ class PlayerStateNotifier extends ChangeNotifier {
       // 2. Jika bukan offline atau gagal, stream audio vokal asli
       if (!sourceLoaded) {
         final urls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(baseSong, quality: _audioQuality);
+        final origHeaders = YoutubeAudioExtractor.getStreamHeaders(baseSong.youtubeId ?? baseSong.id);
         for (final url in urls) {
           try {
+            final uri = Uri.parse(url);
+            final needsH = !baseSong.isLive && uri.host.endsWith('googlevideo.com');
             final audioSource = AudioSource.uri(
-              Uri.parse(url),
-              headers: _googleVideoHeaders,
+              uri,
+              headers: needsH ? origHeaders : null,
               tag: MediaItem(
                 id: baseSong.id,
                 title: baseSong.title,

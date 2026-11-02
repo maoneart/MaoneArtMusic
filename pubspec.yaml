@@ -1,7 +1,7 @@
 name: maoneart_music
 description: "MaoneArt Music - Premium Glassmorphic Music Player & Streaming Client built with Flutter"
 publish_to: 'none'
-version: 1.0.12+13
+version: 1.0.13+14
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -17,8 +17,9 @@ dependencies:
   just_audio: ^0.10.6
   audio_service: ^0.18.19
 
-  # YouTube Audio Extraction & Networking
-  youtube_explode_dart: ^3.1.0
+  # YouTube Audio Extraction & Networking (Musify Custom Engine)
+  youtube_explode_dart:
+    path: ./packages/youtube_explode_dart
   http: ^1.2.1
   dio: ^5.4.3+1
 

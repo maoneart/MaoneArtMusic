@@ -204,6 +204,33 @@
      - Mengimplementasikan `_skipDebounceTimer` (220ms) pada tombol Next dan Previous: tampilan UI (judul, artwork, notifikasi) langsung berubah seketika (0ms), namun pemanggilan stream network ditunda 220ms sehingga klik berkali-kali hanya akan memutar lagu target terakhir tanpa membebani kuota atau jaringan.
   4. Versi aplikasi dinaikkan ke `v1.0.12+13` di `pubspec.yaml`.
 
+### ⚡ Exact Musify Streaming Engine Parity & Token-Matched Playback (v1.0.13+14 - 2 November 2026)
+- **Problem**:
+  1. Pengguna melaporkan bahwa saat memilih lagu, tombol berubah jadi "Pause" (indikasi playing) namun audio tidak jalan sama sekali (stuck di 00:00).
+  2. Musik yang diunduh (offline cache) bisa diputar dengan lancar, tetapi streaming langsung macet.
+  3. Delay streaming berbeda jauh dengan Musify resmi ("katanya kita udah pake daleman musify tapi metodenya beda ga cepet").
+- **Akar Masalah (Root Causes - Musify Deep Audit)**:
+  1. **Token Issuer vs User-Agent Header Mismatch**:
+     - Pada v1.0.11 & v1.0.12, header HTTP `AudioSource.uri` di-hardcode memakai User-Agent Chrome Android (`Mozilla/5.0... Chrome/124.0.0.0`).
+     - Di YouTube CDN (`googlevideo.com`), token stream diikat (*tied*) dengan identitas klien pembuatnya (`visionOs` / `android`). Penggunaan User-Agent yang berbeda menyebabkan Google CDN merespon dengan **HTTP 403 Forbidden** atau menghentikan aliran data (stall).
+  2. **Klien Usang / Terblokir (`android_vr`)**:
+     - Sejak Agustus 2026, YouTube memblokir format dari klien `android_vr` dengan 403. MaoneArt Music sebelumnya masih memasukkan `android_vr` ke Tier 1. Musify resmi menggantinya dengan `YoutubeApiClient.visionOs` (Apple Vision Pro) yang saat ini merupakan satu-satunya klien tanpa PO-Token (*tokenless*).
+  3. **Efek Samping `preload: false`**:
+     - `preload: false` membuat `setAudioSource` return seketika tanpa membuka koneksi jaringan. Akibatnya, loop failover kandidat stream berhenti di kandidat pertama meskipun stream tersebut 403/gagal, dan UI langsung beralih ke state `playing` (tombol Pause) sementara ExoPlayer terhenti di background.
+  4. **Penyaringan Codec Dolby**:
+     - ExoPlayer Android sering mengalami hang saat mencoba decode format Dolby (`ec-3`, `ac-3`, `eac3`). Musify menerapkan scoring kompatibilitas ketat: Dolby = score 0 (dibuang), AAC/M4A = score 3 (prioritas tertinggi), Opus = score 2.
+- **Solusi Tuntas**:
+  1. **Vendor Custom `packages/youtube_explode_dart` dari Musify**:
+     - Mengadopsi paket `youtube_explode_dart` resmi milik Musify (`gokadzev/Musify`) ke dalam folder `./packages/youtube_explode_dart`.
+     - Menyertakan definisi `YoutubeApiClient.visionOs`, validasi anti-403 pada HEAD request, dan filter format DRM/OTF/DRC.
+  2. **Dynamic Header Generator (`YoutubeAudioExtractor.getStreamHeaders`)**:
+     - Mengaitkan ID lagu dengan klien pembuatnya (`_songClients[videoId]`), lalu menyuntikkan User-Agent yang 100% cocok saat `AudioSource.uri` dibuat.
+  3. **Musify Codec Filtering & Scoring**:
+     - Menyingkirkan stream Dolby yang merusak ExoPlayer, memprioritaskan stream AAC/M4A (score 3) untuk startup 0ms.
+  4. **Verified Handshake Playback**:
+     - Menghapus `preload: false` agar loop failover dapat mendeteksi kegagalan koneksi awal dan otomatis berpindah ke kandidat berikutnya jika diperlukan.
+  5. Versi aplikasi dinaikkan ke `v1.0.13+14` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

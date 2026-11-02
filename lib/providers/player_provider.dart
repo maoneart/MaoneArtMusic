@@ -53,6 +53,12 @@ class PlayerStateNotifier extends ChangeNotifier {
 
   // 🎛️ Audio Effects & System Equalizer State
   static const MethodChannel _equalizerChannel = MethodChannel('com.maoneart.music/equalizer');
+  static const Map<String, String> _googleVideoHeaders = {
+    'User-Agent':
+        'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    'Accept': '*/*',
+    'Connection': 'keep-alive',
+  };
   double _playbackSpeed = 1.0;
   double _volume = 1.0;
 
@@ -144,6 +150,17 @@ class PlayerStateNotifier extends ChangeNotifier {
       (event) {},
       onError: (Object e, StackTrace st) {
         print("AudioPlayer playbackEvent notice: $e");
+        if (_status == PlayerLoadingStatus.playing || _status == PlayerLoadingStatus.loading) {
+          if (_currentSong != null) {
+            YoutubeAudioExtractor.evict(_currentSong!.id);
+          }
+          _status = PlayerLoadingStatus.error;
+          _errorMessage = "Gagal memutar stream audio. Mencoba trek lain...";
+          notifyListeners();
+          if (_queue.length > 1) {
+            Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
+          }
+        }
       },
     );
   }
@@ -293,13 +310,14 @@ class PlayerStateNotifier extends ChangeNotifier {
         return;
       }
 
-      // 7. Low-Latency Streaming Playback with Immediate Play Trigger (<500ms)
+      // 7. Low-Latency Streaming Playback with Reliable Verified AudioSource
       bool sourceSet = false;
       for (final streamUrl in candidateUrls) {
         if (_playRequestId != currentRequestId) return;
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(streamUrl),
+            headers: _googleVideoHeaders,
             tag: MediaItem(
               id: _currentSong!.id,
               title: _currentSong!.title,
@@ -310,7 +328,7 @@ class PlayerStateNotifier extends ChangeNotifier {
             ),
           );
 
-          await _player.setAudioSource(audioSource, preload: false).timeout(const Duration(seconds: 10));
+          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 8));
           if (_playRequestId != currentRequestId) return;
           await _player.play();
 
@@ -329,6 +347,9 @@ class PlayerStateNotifier extends ChangeNotifier {
       if (_playRequestId != currentRequestId) return;
 
       if (!sourceSet) {
+        if (_currentSong != null) {
+          YoutubeAudioExtractor.evict(_currentSong!.id);
+        }
         _status = PlayerLoadingStatus.error;
         _errorMessage = "Gagal memuat format audio untuk '${_currentSong!.title}'.";
         notifyListeners();
@@ -688,6 +709,7 @@ class PlayerStateNotifier extends ChangeNotifier {
         try {
           final audioSource = AudioSource.uri(
             Uri.parse(url),
+            headers: _googleVideoHeaders,
             tag: MediaItem(
               id: baseSong.id,
               title: "${baseSong.title} (Karaoke)",
@@ -775,6 +797,7 @@ class PlayerStateNotifier extends ChangeNotifier {
           try {
             final audioSource = AudioSource.uri(
               Uri.parse(url),
+              headers: _googleVideoHeaders,
               tag: MediaItem(
                 id: baseSong.id,
                 title: baseSong.title,

@@ -158,6 +158,31 @@
      - Naikkan batas waktu `setAudioSource` dari 6 detik ke 10 detik agar koneksi seluler tidak terputus prematur.
   5. Versi aplikasi dinaikkan ke `v1.0.10+11` di `pubspec.yaml`.
 
+### 🛡️ Online Streaming Fix: Chrome Mobile UA Header, Preload Handshake & Stale Token Eviction (v1.0.11+12 - 2 November 2026)
+- **Problem & Penemuan Krusial User**:
+  - Lagu yang dicari dan gagal berputar saat streaming online ternyata **bisa berputar 100% normal setelah ditekan tombol Download**!
+  - Saat streaming online, tombol langsung berubah jadi ikon "Pause" tapi detik lagu tetap di 00:00 dan tidak bersuara sama sekali.
+- **Akar Masalah (Root Cause)**:
+  1. **Header User-Agent ExoPlayer Terblokir 403**:
+     - `Dio` di `AudioCacheService` menyertakan header `User-Agent: Mozilla/5.0 (Linux; Android 14; Mobile)...`, sehingga proses download selalu sukses tanpa hambatan.
+     - Sebaliknya, `AudioSource.uri` di `player_provider.dart` tidak menyertakan headers sama sekali sehingga Android ExoPlayer default mengirim `User-Agent: ExoPlayerLib/...`. Google Video CDN (`googlevideo.com`) memblokir permintaan ExoPlayer mentah dengan **HTTP 403 Forbidden**.
+  2. **`preload: false` Mematikan Logika Failover Loop**:
+     - Penggunaan `preload: false` membuat `setAudioSource` return seketika (10ms) sebelum koneksi jaringan terbuka. Akibatnya, blokir 403 tidak tertangkap oleh blok `catch (sourceErr)`, loop langsung berhenti di kandidat pertama, dan UI langsung menganggap lagu berputar (`playing = true` -> tombol Pause), padahal native thread ExoPlayer sedang macet/error di 00:00.
+  3. **Stale Cache Expiration (5 Jam Terlalu Lama)**:
+     - Token streaming YouTube kedaluwarsa dalam 90–120 menit. Cache 5 jam di SharedPreferences memicu pemakaian ulang URL basi yang menghasilkan 403.
+  4. **Silent PlaybackEvent Error**:
+     - Event error di `playbackEventStream` hanya dicetak ke konsol tanpa mengubah state error atau memicu auto-skip.
+- **Solusi Tuntas**:
+  1. **Injeksi `_googleVideoHeaders` Universal**:
+     - Ditambahkan header Chrome Mobile resmi (`Mozilla/5.0 (Linux; Android 14; Mobile)...`) pada semua pemanggilan `AudioSource.uri` (online streaming biasa dan karaoke). `just_audio` otomatis menjalankan proxy lokal yang membungkus koneksi HTTP dengan User-Agent valid, bebas 403.
+  2. **Pemulihan Handshake Koneksi**:
+     - Menghapus `preload: false` pada streaming online agar `setAudioSource` memvalidasi respon awal server. Jika kandidat 1 bermasalah, `catch` langsung melompat ke kandidat 2/3 secara mulus.
+  3. **Stale Cache Eviction (`YoutubeAudioExtractor.evict`)**:
+     - Menurunkan masa kedaluwarsa token dari 5 jam menjadi 90 menit, serta menghapus cache ID lagu seketika bila terjadi kegagalan stream.
+  4. **Active Error Recovery**:
+     - `playbackEventStream.onError` kini otomatis mengevikasi cache, menyetel status error, dan memicu `next(isAuto: true)` jika ada antrean lagu lain.
+  5. Versi aplikasi dinaikkan ke `v1.0.11+12` di `pubspec.yaml`.
+
 ---
 
 ## 📋 Active Tasks / Future Ideas

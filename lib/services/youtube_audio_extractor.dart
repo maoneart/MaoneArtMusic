@@ -9,8 +9,8 @@ class _CachedStream {
   final DateTime timestamp;
   _CachedStream(this.urls, this.timestamp);
 
-  // YouTube audio stream URLs are generally valid for 5 to 6 hours
-  bool get isExpired => DateTime.now().difference(timestamp).inHours >= 5;
+  // YouTube audio stream tokens are short-lived (expire in 90-120 mins)
+  bool get isExpired => DateTime.now().difference(timestamp).inMinutes >= 90;
 }
 
 class YoutubeAudioExtractor {
@@ -21,6 +21,18 @@ class YoutubeAudioExtractor {
   static void clearCache() {
     _streamCache.clear();
     _inFlightRequests.clear();
+  }
+
+  /// Evict stale or broken stream URLs for a specific song ID immediately
+  static void evict(String songId) {
+    _streamCache.removeWhere((k, _) => k.contains(songId));
+    _inFlightRequests.removeWhere((k, _) => k.contains(songId));
+    SharedPreferences.getInstance().then((prefs) {
+      final keys = prefs.getKeys().where((k) => k.contains(songId));
+      for (final k in keys) {
+        prefs.remove(k);
+      }
+    }).catchError((_) {});
   }
 
   /// Pre-warm YouTube disk cache into RAM at app launch
@@ -35,7 +47,7 @@ class YoutubeAudioExtractor {
             try {
               final Map<String, dynamic> jsonMap = json.decode(diskData);
               final ts = DateTime.tryParse(jsonMap['ts'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-              if (DateTime.now().difference(ts).inHours < 5) {
+              if (DateTime.now().difference(ts).inMinutes < 90) {
                 final List<dynamic> rawUrls = jsonMap['urls'] ?? [];
                 final urls = rawUrls.map((u) => u.toString()).toList();
                 if (urls.isNotEmpty) {
@@ -120,7 +132,7 @@ class YoutubeAudioExtractor {
       if (diskData != null && diskData.isNotEmpty) {
         final Map<String, dynamic> jsonMap = json.decode(diskData);
         final ts = DateTime.tryParse(jsonMap['ts'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        if (DateTime.now().difference(ts).inHours < 5) {
+        if (DateTime.now().difference(ts).inMinutes < 90) {
           final List<dynamic> rawUrls = jsonMap['urls'] ?? [];
           final urls = rawUrls.map((u) => u.toString()).toList();
           if (urls.isNotEmpty) {

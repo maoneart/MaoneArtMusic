@@ -1,7 +1,7 @@
 # Project Memory — MaoneArt Music (`/sdcard/www/MaoneArtMusic`)
 
 > **Flutter Glassmorphic Music Streaming Client**  
-> **Terakhir diperbarui**: 2 November 2026
+> **Terakhir diperbarui**: 5 November 2026
 
 ---
 
@@ -234,6 +234,20 @@
   4. **Verified Handshake Playback**:
      - Menghapus `preload: false` agar loop failover dapat mendeteksi kegagalan koneksi awal dan otomatis berpindah ke kandidat berikutnya jika diperlukan.
   5. Versi aplikasi dinaikkan ke `v1.0.13+14` di `pubspec.yaml`.
+
+### 🔄 Self-Healing Same-Track Retry & Diverse Genre Automix Radio (v1.0.14+15 - 5 November 2026)
+- **Problem**:
+  1. **Loncat *Next-Next* 3x Sebelum Bunyi**: Saat berpindah jaringan (Wi-Fi ⇄ Seluler / IP berubah) atau membuka ulang aplikasi, URL di cache untuk lagu yang dipilih dan 3 lagu hasil *prefetch* ditolak oleh CDN (403). Karena `playSong` langsung memanggil `next(isAuto: true)` saat gagal tanpa mencoba ambil token baru untuk lagu yang sama, aplikasi melompat *next-next* 3 kali sampai tiba di lagu ke-4 yang belum ter-cache.
+  2. **Lagu Setelah Pencarian Memutar Lagu yang Sama (Beda Versi/Cover/Penyanyi)**: Saat mencari lagu (misal `"wali dik"`) lalu memilih lagu, antrean diisi seluruh hasil pencarian (`newQueue: musicState.searchResults`), sehingga lagu-lagu berikutnya memutar ulang lagu `"Dik"` versi cover/akustik/penyanyi lain, bukan lagu berbeda yang satu genre.
+- **Solusi Tuntas**:
+  1. **Self-Healing Fresh Retry pada Lagu yang Sama (`player_provider.dart` & `youtube_audio_extractor.dart`)**:
+     - Jika kandidat URL dari cache gagal dimuat (`activeStreamUrl == null`) atau putus di <5 detik pertama, sistem otomatis membersihkan cache basi (`clearCache()` + `evict()`), lalu menarik token baru (`forceRefresh: true` + *search mirror fallback*) dan memutar ulang **lagu yang sama** tanpa loncat *next-next*.
+     - Menyimpan identitas klien pembuat token (`visionOs`, `android`, `tv`, `safari`) ke `SharedPreferences` disk cache dan menurunkan TTL cache ke 45 menit agar tidak terjadi mismatch `User-Agent` saat aplikasi dibuka kembali.
+     - Menambahkan `streamHeaders` pada `AudioCacheService.autoCacheStreamInBackground`.
+  2. **True Genre & Vibe Automix Radio (Anti-Duplicate & Anti-Cover)**:
+     - Di `search_screen.dart`, memilih lagu hasil pencarian kini menyetel `newQueue: [song]` dan segera memicu `getAutomixRadioSongs` di latar belakang.
+     - Di `music_service.dart` & `player_provider.dart`, ditambahkan `normalizeCoreTitle` dan `isSameOrCoverSong` yang menyingkirkan semua variasi judul lagu yang sama (cover, akustik, koplo, live, remix) serta mengutamakan penyanyi & lagu berbeda dari genre dan era yang sama (`RDAMVM$videoId`).
+  3. Versi aplikasi dinaikkan ke `v1.0.14+15` di `pubspec.yaml`.
 
 ---
 

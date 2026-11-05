@@ -1004,12 +1004,113 @@ class MusicService {
     return null;
   }
 
+  /// Normalisasi judul inti lagu untuk mendeteksi lagu kembar / versi cover / akustik / remix
+  static String normalizeCoreTitle(String rawTitle, [String? artist]) {
+    var t = rawTitle.toLowerCase();
+    // Jika judul berformat "Artis - Judul", ambil bagian judulnya
+    if (t.contains(' - ')) {
+      final parts = t.split(' - ');
+      if (parts.length >= 2) {
+        final cleanArt = (artist ?? '').toLowerCase().replaceAll('- topic', '').trim();
+        if (cleanArt.isNotEmpty && parts.first.contains(cleanArt)) {
+          t = parts.sublist(1).join(' ');
+        } else if (cleanArt.isNotEmpty && parts.last.contains(cleanArt)) {
+          t = parts.sublist(0, parts.length - 1).join(' ');
+        } else {
+          t = parts.sublist(1).join(' ');
+        }
+      }
+    }
+
+    // Hapus teks di dalam kurung (...) atau [...]
+    t = t.replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), ' ');
+
+    // Hapus nama artis dari judul jika tercantum
+    if (artist != null && artist.trim().isNotEmpty) {
+      final cleanArtist = artist
+          .toLowerCase()
+          .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
+          .replaceAll('various artists', '')
+          .replaceAll('- topic', '')
+          .replaceAll('official', '')
+          .trim();
+      if (cleanArtist.length >= 2) {
+        t = t.replaceAll(RegExp(r'\b' + RegExp.escape(cleanArtist) + r'\b'), ' ');
+      }
+    }
+
+    // Hapus kata-kata penanda versi/cover/noise
+    t = t.replaceAll(
+      RegExp(
+        r'\b(official|music|video|audio|lyric|lyrics|lirik|clip|mv|hd|4k|hq|'
+        r'cover|live|acoustic|akustik|koplo|dangdut|remix|dj|version|versi|'
+        r'slowed|reverb|speed|sped|up|karaoke|instrumental|minus|one|full|'
+        r'lagu|song|single|terbaru|populer|hits|by|feat|ft|x)\b',
+      ),
+      ' ',
+    );
+
+    t = t.replaceAll(RegExp(r'[^a-z0-9\s]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    return t;
+  }
+
+  /// Normalisasi nama penyanyi
+  static String normalizeArtistName(String rawArtist) {
+    return rawArtist
+        .toLowerCase()
+        .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
+        .replaceAll('various artists', '')
+        .replaceAll('- topic', '')
+        .replaceAll('topic', '')
+        .replaceAll('official', '')
+        .replaceAll('music', '')
+        .replaceAll('band', '')
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  /// Mengecek apakah 2 lagu sebenarnya adalah lagu yang sama (termasuk cover penyanyi lain / versi lain)
+  static bool isSameOrCoverSong(Song a, Song b) {
+    if (a.id == b.id) return true;
+    if (a.youtubeId != null && a.youtubeId == b.youtubeId) return true;
+
+    final coreA = normalizeCoreTitle(a.title, a.artist);
+    final coreB = normalizeCoreTitle(b.title, b.artist);
+
+    if (coreA.isEmpty || coreB.isEmpty) {
+      return a.title.toLowerCase().trim() == b.title.toLowerCase().trim();
+    }
+
+    if (coreA == coreB) return true;
+
+    // Jika salah satu judul inti >= 3 huruf dan muncul sebagai kata utuh di judul satunya
+    // Contoh: coreA = "dik", coreB = "dik akustik" atau "dik felix irwan" -> terdeteksi sama!
+    final shorter = coreA.length <= coreB.length ? coreA : coreB;
+    final longer = coreA.length <= coreB.length ? coreB : coreA;
+    if (shorter.length >= 3) {
+      if (RegExp(r'\b' + RegExp.escape(shorter) + r'\b').hasMatch(longer)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   /// 📻 Spotify / YouTube Music Automix Song Radio:
   /// Menghasilkan antrean lagu otomatis dari era, genre, dan vibe yang sama persis
-  /// (misal: Peterpan "Ada Apa Denganmu" -> Sheila On 7, Dewa 19, Padi, Ungu, d'Masiv era 2000-an).
+  /// dengan LAGU & PENYANYI BERBEDA (bukan memutar ulang lagu yang sama beda versi/cover).
   Future<List<Song>> getAutomixRadioSongs(Song anchorSong, {int limit = 20}) async {
-    final List<Song> automixSongs = [];
-    final Set<String> seenIds = {};
+    final List<Song> diffArtistSongs = [];
+    final List<Song> sameArtistSongs = [];
+    final Set<String> seenIds = {anchorSong.id};
+    final Set<String> seenCoreTitles = {};
+
+    final anchorCoreTitle = normalizeCoreTitle(anchorSong.title, anchorSong.artist);
+    if (anchorCoreTitle.isNotEmpty) {
+      seenCoreTitles.add(anchorCoreTitle);
+    }
+    final anchorNormArtist = normalizeArtistName(anchorSong.artist);
 
     String? videoId = anchorSong.youtubeId;
     if (videoId == null || videoId.isEmpty) {
@@ -1017,8 +1118,12 @@ class MusicService {
         videoId = anchorSong.id.replaceFirst('yt_', '');
       }
     }
+    if (videoId != null && videoId.isNotEmpty) {
+      seenIds.add(videoId);
+      seenIds.add('yt_$videoId');
+    }
 
-    // Jika videoId belum ada (misal dari Saavn/lokal), cari videoId di YouTube dulu
+    // Jika videoId belum ada, cari videoId di YouTube dulu
     if (videoId == null || videoId.isEmpty) {
       try {
         final searchHits = await searchSongs('${anchorSong.title} ${anchorSong.artist}', limit: 3);
@@ -1027,6 +1132,40 @@ class MusicService {
           videoId = first.youtubeId ?? (first.id.startsWith('yt_') ? first.id.replaceFirst('yt_', '') : null);
         }
       } catch (_) {}
+    }
+
+    void addCandidateIfDistinct(Song candidate) {
+      if (!seenIds.add(candidate.id)) return;
+      if (candidate.youtubeId != null && !seenIds.add(candidate.youtubeId!)) return;
+
+      // 1. Tolak mutlak jika lagunya sama / cover / versi lain dari lagu utama
+      if (isSameOrCoverSong(anchorSong, candidate)) return;
+
+      final candCore = normalizeCoreTitle(candidate.title, candidate.artist);
+      if (candCore.isEmpty || seenCoreTitles.contains(candCore)) return;
+
+      // Cek juga apakah candCore beririsan kata utuh dengan anchorCoreTitle
+      if (anchorCoreTitle.length >= 3 &&
+          RegExp(r'\b' + RegExp.escape(anchorCoreTitle) + r'\b').hasMatch(candCore)) {
+        return;
+      }
+
+      seenCoreTitles.add(candCore);
+
+      final candNormArtist = normalizeArtistName(candidate.artist);
+      final isSameArtist = anchorNormArtist.isNotEmpty &&
+          candNormArtist.isNotEmpty &&
+          (candNormArtist.contains(anchorNormArtist) ||
+              anchorNormArtist.contains(candNormArtist) ||
+              candidate.title.toLowerCase().contains(anchorNormArtist));
+
+      if (isSameArtist) {
+        if (sameArtistSongs.length < 2) {
+          sameArtistSongs.add(candidate);
+        }
+      } else {
+        diffArtistSongs.add(candidate);
+      }
     }
 
     if (videoId != null && videoId.isNotEmpty) {
@@ -1060,13 +1199,13 @@ class MusicService {
           final data = json.decode(res.body);
 
           void extractRadioVideos(dynamic obj) {
-            if (automixSongs.length >= limit) return;
+            if (diffArtistSongs.length >= limit) return;
             if (obj is Map) {
               if (obj.containsKey('playlistPanelVideoRenderer')) {
                 final v = obj['playlistPanelVideoRenderer'] as Map?;
                 if (v != null) {
                   final vid = v['videoId'] as String?;
-                  if (vid != null && vid.isNotEmpty && vid != videoId && seenIds.add(vid)) {
+                  if (vid != null && vid.isNotEmpty && vid != videoId) {
                     String rawTitle = '';
                     if (v['title'] is Map) {
                       final runs = v['title']['runs'] as List?;
@@ -1109,8 +1248,8 @@ class MusicService {
                     final seconds = _parseDuration(lenText);
                     final formattedTitle = formatSongTitle(rawTitle);
 
-                    if (rawTitle.isNotEmpty) {
-                      automixSongs.add(Song(
+                    if (rawTitle.isNotEmpty && (seconds == 0 || (seconds >= 60 && seconds <= 480))) {
+                      addCandidateIfDistinct(Song(
                         id: 'yt_$vid',
                         youtubeId: vid,
                         title: formattedTitle.isNotEmpty ? formattedTitle : rawTitle,
@@ -1142,19 +1281,50 @@ class MusicService {
       }
     }
 
-    // 🛡️ Fallback Resilience: jika automix kosong/gagal, ambil lagu radio dari artist
-    if (automixSongs.isEmpty) {
-      return getArtistRadioSongs(
-        anchorSong.artist,
-        currentSongTitle: anchorSong.title,
-        limit: limit,
-      );
+    // 2. Jika lagu dari penyanyi berbeda masih kurang (< 6 lagu), perkaya dengan rekomendasi se-genre
+    if (diffArtistSongs.length < 6 && videoId != null && videoId.isNotEmpty) {
+      try {
+        final related = await getRelatedSongs(anchorSong, limit: 15);
+        for (final r in related) {
+          addCandidateIfDistinct(r);
+        }
+      } catch (_) {}
     }
 
-    return automixSongs;
+    // 3. Susun antrean akhir: utamakan penyanyi & lagu berbeda yang se-genre!
+    // Hindari 2 lagu berturut-turut dari penyanyi yang sama
+    final List<Song> finalQueue = [];
+    final Map<String, int> artistCount = {};
+
+    for (final s in diffArtistSongs) {
+      final normArt = normalizeArtistName(s.artist);
+      final count = artistCount[normArt] ?? 0;
+      if (count < 2) {
+        finalQueue.add(s);
+        artistCount[normArt] = count + 1;
+      }
+      if (finalQueue.length >= limit - 2) break;
+    }
+
+    // Sisipkan maksimal 1-2 lagu berbeda dari penyanyi awal di posisi belakang (setelah minimal 4 lagu penyanyi lain)
+    for (int i = 0; i < sameArtistSongs.length; i++) {
+      final insertPos = min(finalQueue.length, 4 + (i * 5));
+      finalQueue.insert(insertPos, sameArtistSongs[i]);
+    }
+
+    if (finalQueue.isNotEmpty) {
+      return finalQueue.take(limit).toList();
+    }
+
+    // 🛡️ Fallback terakhir jika semua gagal
+    return getArtistRadioSongs(
+      anchorSong.artist,
+      currentSongTitle: anchorSong.title,
+      limit: limit,
+    );
   }
 
-  /// Fetch Artist Radio / Trending tracks for endless continuous playback ("ga putus-putus")
+  /// Fetch Artist & Genre Radio / Trending tracks for endless continuous playback
   Future<List<Song>> getArtistRadioSongs(String artist, {String? currentSongTitle, int limit = 15}) async {
     final cleanArtist = artist
         .replaceAll(RegExp(r'\([^)]*\)|\[[^\]]*\]'), '')
@@ -1167,27 +1337,28 @@ class MusicService {
 
     final List<Song> radioSongs = [];
     final Set<String> seenIds = {};
+    final Set<String> seenCoreTitles = {};
+    final String currentCore = currentSongTitle != null ? normalizeCoreTitle(currentSongTitle, cleanArtist) : '';
+    if (currentCore.isNotEmpty) seenCoreTitles.add(currentCore);
 
-    // 1. Search artist top popular hits and trending releases
     final searchQueries = [
+      'Lagu Hits Pop Band sejenis $cleanArtist official',
       '$cleanArtist top songs hits trending',
-      '$cleanArtist lagu populer terbaru',
     ];
 
     for (final q in searchQueries) {
       try {
         final results = await searchSongs(q, limit: limit);
         for (final s in results) {
-          final sTitle = s.title.toLowerCase();
-          final sArtist = s.artist.toLowerCase();
-          final artistLower = cleanArtist.toLowerCase();
+          final candCore = normalizeCoreTitle(s.title, s.artist);
+          if (candCore.isEmpty || seenCoreTitles.contains(candCore)) continue;
+          if (currentCore.length >= 3 &&
+              RegExp(r'\b' + RegExp.escape(currentCore) + r'\b').hasMatch(candCore)) {
+            continue;
+          }
 
-          // Don't add identical song if currentSongTitle is provided
-          if (currentSongTitle != null && sTitle == currentSongTitle.toLowerCase()) continue;
-
-          // Ensure it matches the artist
-          final isArtistMatch = sArtist.contains(artistLower) || sTitle.contains(artistLower);
-          if (isArtistMatch && seenIds.add(s.id)) {
+          if (seenIds.add(s.id)) {
+            seenCoreTitles.add(candCore);
             radioSongs.add(s);
           }
         }
@@ -1195,19 +1366,6 @@ class MusicService {
       if (radioSongs.length >= limit) break;
     }
 
-    // 2. Fallback: if not enough tracks found, do broader search
-    if (radioSongs.length < 5) {
-      try {
-        final fallback = await searchSongs('$cleanArtist songs', limit: limit);
-        for (final s in fallback) {
-          if (seenIds.add(s.id)) {
-            radioSongs.add(s);
-          }
-        }
-      } catch (_) {}
-    }
-
-    // Shuffle the results so next songs feel dynamic, fresh, and randomized!
     radioSongs.shuffle();
     return radioSongs;
   }

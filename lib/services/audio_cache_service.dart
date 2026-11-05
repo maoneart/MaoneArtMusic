@@ -256,7 +256,12 @@ class AudioCacheService {
 
         if (await tempFile.exists()) await tempFile.delete();
 
-        await _dio.download(streamUrl, tempFile.path);
+        final streamHeaders = YoutubeAudioExtractor.getStreamHeaders(song.youtubeId ?? song.id);
+        await _dio.download(
+          streamUrl,
+          tempFile.path,
+          options: Options(headers: streamHeaders),
+        );
 
         if (await tempFile.exists() && await tempFile.length() > 50000) {
           if (await targetFile.exists()) await targetFile.delete();

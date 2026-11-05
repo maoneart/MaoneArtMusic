@@ -474,7 +474,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                     final firstSong = shuffled.first;
                     ref.read(playerProvider).playSong(
                           firstSong,
-                          newQueue: shuffled,
+                          newQueue: [firstSong],
                           index: 0,
                         );
                     Navigator.of(context).push(
@@ -527,8 +527,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                 FocusScope.of(context).unfocus();
                 ref.read(playerProvider).playSong(
                       song,
-                      newQueue: musicState.searchResults,
-                      index: index,
+                      newQueue: [song],
+                      index: 0,
                     );
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const PlayerScreen()),
@@ -591,7 +591,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   final firstSong = shuffled.first;
                   ref.read(playerProvider).playSong(
                         firstSong,
-                        newQueue: shuffled,
+                        newQueue: [firstSong],
                         index: 0,
                       );
                   Navigator.of(context).push(
@@ -655,8 +655,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                   FocusScope.of(context).unfocus();
                   ref.read(playerProvider).playSong(
                         song,
-                        newQueue: musicState.searchResults,
-                        index: index,
+                        newQueue: [song],
+                        index: 0,
                       );
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (context) => const PlayerScreen()),

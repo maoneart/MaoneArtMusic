@@ -40,6 +40,8 @@ class PlayerStateNotifier extends ChangeNotifier {
   bool _isLoadingLyrics = false;
   bool _isPlayingOffline = false;
   int _playRequestId = 0;
+  int _consecutiveAutoSkips = 0;
+  String? _retriedSongId;
   bool _isExtendingQueue = false;
   Completer<void>? _extendingQueueCompleter;
   String? _lastPreloadedSongId;
@@ -147,12 +149,27 @@ class PlayerStateNotifier extends ChangeNotifier {
         print("AudioPlayer playbackEvent notice: $e");
         if (_status == PlayerLoadingStatus.playing || _status == PlayerLoadingStatus.loading) {
           if (_currentSong != null) {
-            YoutubeAudioExtractor.evict(_currentSong!.id);
+            final song = _currentSong!;
+            // ⚡ Self-Healing Retry: Jika stream putus di awal lagu karena cache basi / IP berubah,
+            // bersihkan cache dan coba muat ulang lagu yang sama terlebih dahulu sebelum auto-next!
+            if (_position.inSeconds < 5 && _retriedSongId != song.id) {
+              _retriedSongId = song.id;
+              YoutubeAudioExtractor.clearCache();
+              YoutubeAudioExtractor.evict(song.id);
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (_currentSong?.id == song.id) {
+                  playSong(song, isAutoTransition: true);
+                }
+              });
+              return;
+            }
+            YoutubeAudioExtractor.evict(song.id);
           }
           _status = PlayerLoadingStatus.error;
           _errorMessage = "Gagal memutar stream audio. Mencoba trek lain...";
           notifyListeners();
-          if (_queue.length > 1) {
+          if (_queue.length > 1 && _consecutiveAutoSkips < 3) {
+            _consecutiveAutoSkips++;
             Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
           }
         }
@@ -196,13 +213,55 @@ class PlayerStateNotifier extends ChangeNotifier {
     }
   }
 
+  /// Mencoba memuat daftar kandidat URL stream ke ExoPlayer dengan verifikasi handshake & headers
+  Future<String?> _tryLoadStreamCandidates(
+    Song song,
+    List<String> candidateUrls,
+    int currentRequestId,
+  ) async {
+    if (candidateUrls.isEmpty) return null;
+    final videoId = song.youtubeId ??
+        (song.id.startsWith('yt_') ? song.id.substring(3) : song.id);
+    final streamHeaders = YoutubeAudioExtractor.getStreamHeaders(videoId);
+
+    for (final streamUrl in candidateUrls) {
+      if (_playRequestId != currentRequestId) return null;
+      try {
+        final uri = Uri.parse(streamUrl);
+        final needsHeaders = !song.isLive && uri.host.endsWith('googlevideo.com');
+
+        final audioSource = AudioSource.uri(
+          uri,
+          headers: needsHeaders ? streamHeaders : null,
+          tag: MediaItem(
+            id: song.id,
+            title: song.title,
+            artist: song.artist,
+            album: song.album,
+            artUri: Uri.tryParse(song.artworkUrl),
+            duration: Duration(seconds: song.durationSeconds),
+          ),
+        );
+
+        await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 9));
+        if (_playRequestId != currentRequestId) return null;
+        await _player.play();
+        return streamUrl;
+      } catch (sourceErr) {
+        print("AudioSource load notice for candidate URL: $sourceErr");
+        continue;
+      }
+    }
+    return null;
+  }
+
   /// ⚡ Musify-style Ultra-Fast Direct Playback Engine with 0ms Cache Support & Endless Queue
   Future<void> playSong(Song song, {List<Song>? newQueue, List<Song>? queue, int? index, bool isAutoTransition = false}) async {
     final int currentRequestId = ++_playRequestId;
     final List<Song>? targetQueue = newQueue ?? queue;
 
-    // 🛑 0. Immediate Stop of prior playback so old audio socket & buffer close INSTANTLY
     if (!isAutoTransition) {
+      _consecutiveAutoSkips = 0;
       _player.stop();
     }
 
@@ -220,6 +279,11 @@ class PlayerStateNotifier extends ChangeNotifier {
         _currentIndex = _queue.indexWhere((s) => s.id == song.id);
       }
       _currentSong = _queue[_currentIndex];
+    }
+
+    // Jika antrean hanya 1 lagu (misal dari pencarian), segera bangun antrean Automix Radio (se-genre, beda lagu & penyanyi)
+    if (_queue.length <= 1) {
+      Future.microtask(() => _checkAndExtendQueue());
     }
 
     _bindGlobalHandlerCallbacks();
@@ -277,6 +341,8 @@ class PlayerStateNotifier extends ChangeNotifier {
         if (_playRequestId != currentRequestId) return;
         await _player.play();
 
+        _consecutiveAutoSkips = 0;
+        _retriedSongId = null;
         _status = PlayerLoadingStatus.playing;
         _isPlayingOffline = true;
         notifyListeners();
@@ -290,89 +356,80 @@ class PlayerStateNotifier extends ChangeNotifier {
 
     try {
       // 6. Fast-Track Stream Extraction (Using RAM/Disk Cache & In-flight Deduplication)
-      final candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(_currentSong!, quality: _audioQuality)
-          .timeout(const Duration(seconds: 15));
+      List<String> candidateUrls = [];
+      try {
+        candidateUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(
+          _currentSong!,
+          quality: _audioQuality,
+        ).timeout(const Duration(seconds: 15));
+      } catch (_) {}
 
       if (_playRequestId != currentRequestId) return;
-
-      if (candidateUrls.isEmpty) {
-        _status = PlayerLoadingStatus.error;
-        _errorMessage = "Gagal menemukan stream '${_currentSong!.title}'. Coba lagu lain.";
-        notifyListeners();
-        if (_queue.length > 1) {
-          Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
-        }
-        return;
-      }
 
       // 7. Low-Latency Streaming Playback with Verified AudioSource & Failover
-      bool sourceSet = false;
-      final videoId = _currentSong!.youtubeId ??
-          (_currentSong!.id.startsWith('yt_')
-              ? _currentSong!.id.substring(3)
-              : _currentSong!.id);
-      final streamHeaders = YoutubeAudioExtractor.getStreamHeaders(videoId);
+      String? activeStreamUrl = await _tryLoadStreamCandidates(
+        _currentSong!,
+        candidateUrls,
+        currentRequestId,
+      );
 
-      for (final streamUrl in candidateUrls) {
-        if (_playRequestId != currentRequestId) return;
+      if (_playRequestId != currentRequestId) return;
+
+      // ⚡ 8. SELF-HEALING RETRY PADA LAGU YANG SAMA (Mencegah loncat Next-Next saat cache basi / ganti jaringan!)
+      if (activeStreamUrl == null && _currentSong != null) {
+        print("Self-healing retry for '${_currentSong!.title}': clearing stale cache & re-extracting fresh token...");
+        YoutubeAudioExtractor.clearCache();
+        YoutubeAudioExtractor.evict(_currentSong!.id);
+
         try {
-          final uri = Uri.parse(streamUrl);
-          final needsHeaders = !_currentSong!.isLive && uri.host.endsWith('googlevideo.com');
+          final freshUrls = await YoutubeAudioExtractor.getAudioStreamCandidateUrls(
+            _currentSong!,
+            quality: _audioQuality,
+            forceRefresh: true,
+          ).timeout(const Duration(seconds: 15));
 
-          final audioSource = AudioSource.uri(
-            uri,
-            headers: needsHeaders ? streamHeaders : null,
-            tag: MediaItem(
-              id: _currentSong!.id,
-              title: _currentSong!.title,
-              artist: _currentSong!.artist,
-              album: _currentSong!.album,
-              artUri: Uri.tryParse(_currentSong!.artworkUrl),
-              duration: Duration(seconds: _currentSong!.durationSeconds),
-            ),
-          );
-
-          await _player.setAudioSource(audioSource).timeout(const Duration(seconds: 8));
           if (_playRequestId != currentRequestId) return;
-          await _player.play();
 
-          sourceSet = true;
-          _status = PlayerLoadingStatus.playing;
-          _isPlayingOffline = false;
-          notifyListeners();
-          _triggerPostPlaybackTasks(_currentSong!, streamUrl: streamUrl);
-          break;
-        } catch (sourceErr) {
-          print("AudioSource load notice for candidate URL: $sourceErr");
-          continue;
+          activeStreamUrl = await _tryLoadStreamCandidates(
+            _currentSong!,
+            freshUrls,
+            currentRequestId,
+          );
+        } catch (retryErr) {
+          print("Self-healing retry notice: $retryErr");
         }
       }
 
       if (_playRequestId != currentRequestId) return;
 
-      if (!sourceSet) {
+      if (activeStreamUrl == null) {
         if (_currentSong != null) {
           YoutubeAudioExtractor.evict(_currentSong!.id);
         }
         _status = PlayerLoadingStatus.error;
         _errorMessage = "Gagal memuat format audio untuk '${_currentSong!.title}'.";
         notifyListeners();
-        if (_queue.length > 1) {
+        if (_queue.length > 1 && _consecutiveAutoSkips < 3) {
+          _consecutiveAutoSkips++;
           Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
         }
         return;
       }
 
+      _consecutiveAutoSkips = 0;
+      _retriedSongId = null;
       _status = PlayerLoadingStatus.playing;
       _isPlayingOffline = false;
       notifyListeners();
+      _triggerPostPlaybackTasks(_currentSong!, streamUrl: activeStreamUrl);
     } catch (e) {
       if (_playRequestId != currentRequestId) return;
       print("Playback error: $e");
       _status = PlayerLoadingStatus.error;
       _errorMessage = "Gagal memutar audio. Periksa koneksi internet.";
       notifyListeners();
-      if (_queue.length > 1) {
+      if (_queue.length > 1 && _consecutiveAutoSkips < 3) {
+        _consecutiveAutoSkips++;
         Future.delayed(const Duration(milliseconds: 500), () => next(isAuto: true));
       }
     }
@@ -452,14 +509,24 @@ class PlayerStateNotifier extends ChangeNotifier {
 
       if (radioTracks.isNotEmpty) {
         final existingIds = _queue.map((s) => s.id).toSet();
-        final anchorCleanTitle = anchorSong.title.toLowerCase().trim();
-        final toAdd = radioTracks.where((s) {
-          if (existingIds.contains(s.id)) return false;
-          final sTitle = s.title.toLowerCase().trim();
-          // Filter out duplicate versions of the exact same title (hindari variasi/remix lagu yang sama)
-          if (sTitle == anchorCleanTitle) return false;
-          return true;
-        }).toList();
+        final existingCores = _queue
+            .map((s) => MusicService.normalizeCoreTitle(s.title, s.artist))
+            .where((c) => c.isNotEmpty)
+            .toSet();
+        final List<Song> toAdd = [];
+
+        for (final s in radioTracks) {
+          if (existingIds.contains(s.id)) continue;
+          if (MusicService.isSameOrCoverSong(anchorSong, s)) continue;
+          if (_queue.any((q) => MusicService.isSameOrCoverSong(q, s))) continue;
+
+          final sCore = MusicService.normalizeCoreTitle(s.title, s.artist);
+          if (sCore.isNotEmpty && existingCores.contains(sCore)) continue;
+
+          existingIds.add(s.id);
+          if (sCore.isNotEmpty) existingCores.add(sCore);
+          toAdd.add(s);
+        }
 
         if (toAdd.isNotEmpty) {
           // Jika mode shuffle aktif, acak urutan lagu yang baru ditambahkan
